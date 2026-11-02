@@ -4,6 +4,7 @@
 //! transcriptions don't pay model-load or GPU-buffer allocation costs.
 //! Callers must keep transcription off the UI thread.
 
+use std::ffi::c_void;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -133,13 +134,21 @@ impl TranscriptionEngine {
         if let Some(prompt) = opts.initial_prompt.as_deref().filter(|p| !p.is_empty()) {
             params.set_initial_prompt(prompt);
         }
-        let cancelled_flag = cancel.clone();
-        if let Some(flag) = cancel {
-            params.set_abort_callback_safe(move || flag.load(Ordering::Relaxed));
+        // whisper-rs 0.16's `set_abort_callback_safe` boxes the closure as
+        // `Box<Box<dyn FnMut>>` but its trampoline casts the pointer to the
+        // concrete closure type, so it reads garbage and aborts encoding
+        // (whisper error -6). Use the raw API with our own trampoline instead.
+        if let Some(flag) = cancel.as_ref() {
+            // SAFETY: the pointer targets the AtomicBool inside `cancel`, which
+            // this function keeps alive until `full` has returned.
+            unsafe {
+                params.set_abort_callback(Some(abort_trampoline));
+                params.set_abort_callback_user_data(Arc::as_ptr(flag) as *mut c_void);
+            }
         }
 
         let result = self.state.full(params, input);
-        let cancelled = cancelled_flag.is_some_and(|f| f.load(Ordering::Relaxed));
+        let cancelled = cancel.is_some_and(|f| f.load(Ordering::Relaxed));
         if cancelled {
             return Ok(Transcript {
                 text: String::new(),
@@ -171,6 +180,12 @@ impl TranscriptionEngine {
             cancelled: false,
         })
     }
+}
+
+/// whisper.cpp abort callback: returns true when the cancel flag is set.
+unsafe extern "C" fn abort_trampoline(user_data: *mut c_void) -> bool {
+    // SAFETY: `user_data` is the AtomicBool pointer installed in `transcribe`.
+    unsafe { &*(user_data as *const AtomicBool) }.load(Ordering::Relaxed)
 }
 
 /// Remove non-speech annotations whisper emits for silence/noise, e.g.
