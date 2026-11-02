@@ -5,6 +5,27 @@ Newest log entries at the bottom of each section. Dates are absolute (YYYY-MM-DD
 
 ---
 
+## ▶ RESUME HERE (bookmarked 2026-11-02)
+
+**Where we are:** Milestone 2 (recording lifecycle) is built and running. The user's first in-app test hit
+whisper error -6 (whisper-rs abort-callback bug), now fixed in `18d896e`. **The fixed build has not been
+user-tested yet.**
+
+**Next steps, in order:**
+1. Relaunch the app: `open src-tauri/target/release/bundle/macos/LoqWat.app`
+   (or rebuild: `npx tauri build --bundles app`). Allow microphone access if macOS asks again (ad-hoc
+   signature changes on every build).
+2. User retests in TextEdit: tap ⌥Space → speak → ⌥Space; Esc cancel; hold ⌥Space ~3 s (key repeat);
+   silent recording → "No speech detected"; Hold-to-talk mode from the menu bar.
+3. Optional focus check: run the frontmost-app logger (see §6, Milestone 2) during the test and confirm the
+   target app stays in front while recording/transcribing.
+4. If it passes: mark Milestone 2 ✅ 🧪, then start **Milestone 3** (Mac text insertion: Accessibility
+   permission, capture/revalidate the target, paste with clipboard save/restore, recovery window).
+
+**Known open items carried forward:** "Pause Shortcut" still holds ⌥Space (release it on pause, Milestone 4);
+sleep/wake handling not implemented; sound cues not implemented; placeholder icons; stable code-signing
+identity (self-signed cert) so microphone/Accessibility permissions survive rebuilds (Milestone 6).
+
 ## 1. Project summary
 
 **LoqWat** — local, private dictation. Click a text field in any desktop app, press a
@@ -66,6 +87,16 @@ the text. No accounts, cloud, analytics, or transcript storage.
 | 2026-11-02 | Vocabulary hints passed as whisper `initial_prompt` | Fixed every FinCEN/OFAC/KYC error in tests across all models |
 | 2026-11-02 | **Silero VAD v6.2.0 speech gate** (`ggml-org/whisper-vad` @ `9ffd54a1…`, 885 KB) before transcription; gate only, never trims audio; threshold 0.5, min speech 150 ms | whisper invents "you"/"Thank you." on silence/noise with no-speech prob 0.00, so that signal is useless; VAD rejected both test cases in ~12 ms |
 
+| 2026-11-02 | Default shortcut **⌥ Option+Space**, configurable later | Easy to press and to hold; registration errors shown in UI |
+| 2026-11-02 | Escape registered as a global shortcut **only while recording/transcribing** | Cancels a session without swallowing Escape during normal use |
+| 2026-11-02 | `Controller` is a pure state machine (events → actions), with session IDs | Unit-testable; stale or cancelled results can never insert |
+| 2026-11-02 | Presses during Transcribing/Inserting are ignored (no queue); Escape during Inserting is ignored | Spec: no overlapping sessions or silent queued inserts; avoid a half-done insert |
+| 2026-11-02 | Audio thread owns the cpal stream; engine thread owns the model + VAD; warm-up pass after load | cpal streams aren't `Send` on every platform; keeps inference off the UI thread |
+| 2026-11-02 | Menu bar app (`LSUIElement`, Accessory activation policy); indicator is a separate non-focusable, always-on-top window, top-center | Indicator must not activate the app or steal focus |
+| 2026-11-02 | Until Milestone 3, results go to the **recovery** path (main window shows the text) rather than claiming insertion | Honest status; reuses the spec's recovery flow |
+| 2026-11-02 | Bundle ad-hoc signed as `com.fcitradecraft.loqwat` (`signingIdentity "-"`), hardened runtime, `com.apple.security.device.audio-input` entitlement, `NSMicrophoneUsageDescription` | Without the entitlement the hardened runtime blocks the mic; without the description macOS kills the app |
+| 2026-11-02 | Cancel uses our own `extern "C"` abort trampoline instead of whisper-rs `set_abort_callback_safe` | whisper-rs 0.16 bug: the trampoline casts `Box<Box<dyn FnMut>>` to `F`, reads garbage, and aborts encoding (error -6) |
+
 ## 4. Milestones
 
 Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on real OS) · ⛔ blocked
@@ -74,7 +105,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on r
 |---|---|---|---|
 | 0 | Repo + toolchain + Tauri scaffold | 1–2 | ✅ 🧪 release .app built and launched on dev Mac |
 | 1 | Prove transcription (file → mic), benchmark models | 3 | ✅ 🧪 file + live mic verified on dev Mac (accuracy pending user confirmation) |
-| 2 | Recording lifecycle / state machine / indicator | 4 | ⬜ |
+| 2 | Recording lifecycle / state machine / indicator | 4 | 🟨 built; -6 bug fixed; awaiting user retest |
 | 3 | Mac text insertion + clipboard + recovery window | 5 | ⬜ |
 | 4 | First-run setup, model manager, preferences | 6 | ⬜ |
 | 5 | Formatting, vocabulary hints, privacy/resource bounds | 7–8 | ⬜ |
@@ -143,6 +174,23 @@ Each model ran in a fresh process.
   pending the user's confirmation.
 - Silent 3 s room capture: VAD 0 segments → nothing would be inserted ✅.
 
+### 2026-11-02 — Milestone 2 (M1 Pro, macOS 27.0.1, release .app launched via `open`)
+| Check | Result |
+|---|---|
+| Unit tests (controller 17 + earlier 12) | ✅ 29 pass |
+| Integration test `tests/engine_cancel.rs` (real model, cancel flag unset/set/after) | ✅ pass |
+| App launch | ✅ engine ready, load 203–404 ms + warm-up ~230 ms; idle RSS ~443 MB, CPU ~0.1% |
+| ⌥Space registration | ✅ no conflict reported |
+| Microphone prompt for LoqWat itself | ✅ appeared (UserNotificationCenter) and was granted |
+| **Focus:** 26 s recording started from Microsoft Word | ✅ Word stayed frontmost for the whole recording (frontmost-app log, 250 ms polling via `lsappinfo`) |
+| First in-app dictations (25.7 s, 12.5 s) | ❌ whisper error -6 → root-caused to whisper-rs abort callback → fixed in `18d896e`; **retest pending** |
+
+Frontmost-app logger used for focus checks:
+```zsh
+prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | head -1 | sed -E 's/^"([^"]*)".*/\1/');
+[ "$cur" != "$prev" ] && echo "$(date +%T) $cur"; prev=$cur; sleep 0.25; done
+```
+
 ## 7. Session log
 
 ### 2026-11-02
@@ -179,3 +227,14 @@ Each model ran in a fresh process.
 - Live mic test blocked on the permission dialog → handed to the user → passed after the stdin-EOF fix (see §6).
 - **Next:** Milestone 2: recording lifecycle state machine, global shortcut (tap, then hold), Escape cancel,
   session IDs, non-activating indicator.
+
+#### Milestone 2
+- Added `controller.rs` (state machine), `runtime.rs` (audio/engine threads, Hooks trait), rewrote `lib.rs`
+  (tray menu, ⌥Space + Escape shortcuts, indicator window, status/recovery main window, commands), UI pages
+  `index.html` + `indicator.html`, `Info.plist`, `Entitlements.plist`.
+- Fixed the log filter (crate is `loqwat_lib`, not `loqwat`).
+- Bundle identifier was linker-generated (`loqwat-ef71…`); switched to ad-hoc signing with the real bundle ID.
+  This turned on the hardened runtime, so added the audio-input entitlement.
+- First user test: the indicator didn't steal focus ✅; transcription failed with whisper error -6 → fixed
+  (whisper-rs abort-callback bug), regression test added.
+- **Bookmarked here** before the user restarted. See "RESUME HERE" at the top.
