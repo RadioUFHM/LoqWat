@@ -1,0 +1,30 @@
+# Build output
+target/
+dist/
+node_modules/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Models, recordings, benchmarks data — never commit
+*.bin
+*.gguf
+*.wav
+*.mp3
+*.m4a
+*.flac
+models/
+recordings/
+
+# Packaged artifacts
+*.dmg
+*.app
+*.msi
+*.exe
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+.env
