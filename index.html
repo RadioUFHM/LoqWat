@@ -9,9 +9,41 @@
   </head>
   <body>
     <main class="container">
-      <h1>LoqWat</h1>
-      <p>Local, private dictation.</p>
-      <p id="status" class="status">Starting…</p>
+      <header>
+        <h1>LoqWat</h1>
+        <span id="phase" class="pill">Starting…</span>
+      </header>
+
+      <section class="card">
+        <div class="row"><span>Shortcut</span><kbd id="shortcut">—</kbd></div>
+        <div class="row"><span>Model</span><span id="model" class="mono">—</span></div>
+        <div class="row"><span>Engine</span><span id="engine">—</span></div>
+        <p id="shortcut-error" class="error" hidden></p>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <span>Recording mode</span>
+          <span class="seg">
+            <label><input type="radio" name="mode" value="toggle" /> Press / press</label>
+            <label><input type="radio" name="mode" value="hold" /> Hold to talk</label>
+          </span>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="paused" /> Pause shortcut</label>
+          <button id="toggle">Start Dictation</button>
+        </div>
+        <p class="hint">Esc cancels while listening or transcribing.</p>
+      </section>
+
+      <section class="card" id="result-card" hidden>
+        <div class="row"><strong id="result-title">Transcript</strong><button id="dismiss">Discard</button></div>
+        <p id="message" class="message"></p>
+        <textarea id="result" readonly rows="5"></textarea>
+        <p class="hint">Kept in memory only. Automatic insertion into other apps arrives in Milestone 3; for now, select and copy from here.</p>
+      </section>
+
+      <footer id="version" class="mono"></footer>
     </main>
   </body>
 </html>

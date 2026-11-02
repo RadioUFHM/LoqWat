@@ -15,8 +15,8 @@
       {
         "label": "main",
         "title": "LoqWat",
-        "width": 520,
-        "height": 420,
+        "width": 460,
+        "height": 560,
         "resizable": true
       }
     ],
@@ -40,7 +40,9 @@
     "category": "Productivity",
     "shortDescription": "Local, private dictation",
     "macOS": {
-      "minimumSystemVersion": "13.0"
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist"
     }
   }
 }
