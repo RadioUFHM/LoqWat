@@ -7,20 +7,11 @@ Newest log entries at the bottom of each section. Dates are absolute (YYYY-MM-DD
 
 ## ▶ RESUME HERE (bookmarked 2026-11-02)
 
-**Where we are:** Milestone 2 (recording lifecycle) is built and running. The user's first in-app test hit
-whisper error -6 (whisper-rs abort-callback bug), now fixed in `18d896e`. **The fixed build has not been
-user-tested yet.**
+**Where we are:** Milestones 0–2 ✅ (user retest passed 2026-11-02). **Next: Milestone 3**: Mac text
+insertion (Accessibility permission, capture and revalidate the target, paste with clipboard save/restore,
+recovery window). LoqWat currently shows transcripts in its own window and does not insert them yet; that is expected.
 
-**Next steps, in order:**
-1. Relaunch the app: `open src-tauri/target/release/bundle/macos/LoqWat.app`
-   (or rebuild: `npx tauri build --bundles app`). Allow microphone access if macOS asks again (ad-hoc
-   signature changes on every build).
-2. User retests in TextEdit: tap ⌥Space → speak → ⌥Space; Esc cancel; hold ⌥Space ~3 s (key repeat);
-   silent recording → "No speech detected"; Hold-to-talk mode from the menu bar.
-3. Optional focus check: run the frontmost-app logger (see §6, Milestone 2) during the test and confirm the
-   target app stays in front while recording/transcribing.
-4. If it passes: mark Milestone 2 ✅ 🧪, then start **Milestone 3** (Mac text insertion: Accessibility
-   permission, capture/revalidate the target, paste with clipboard save/restore, recovery window).
+To relaunch: `open src-tauri/target/release/bundle/macos/LoqWat.app` (rebuild: `npx tauri build --bundles app`).
 
 **Known open items carried forward:** "Pause Shortcut" still holds ⌥Space (release it on pause, Milestone 4);
 sleep/wake handling not implemented; sound cues not implemented; placeholder icons; stable code-signing
@@ -105,7 +96,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on r
 |---|---|---|---|
 | 0 | Repo + toolchain + Tauri scaffold | 1–2 | ✅ 🧪 release .app built and launched on dev Mac |
 | 1 | Prove transcription (file → mic), benchmark models | 3 | ✅ 🧪 file + live mic verified on dev Mac (accuracy pending user confirmation) |
-| 2 | Recording lifecycle / state machine / indicator | 4 | 🟨 built; -6 bug fixed; awaiting user retest |
+| 2 | Recording lifecycle / state machine / indicator | 4 | ✅ 🧪 user-tested on dev Mac (sleep/wake + sound cues deferred) |
 | 3 | Mac text insertion + clipboard + recovery window | 5 | ⬜ |
 | 4 | First-run setup, model manager, preferences | 6 | ⬜ |
 | 5 | Formatting, vocabulary hints, privacy/resource bounds | 7–8 | ⬜ |
@@ -183,7 +174,13 @@ Each model ran in a fresh process.
 | ⌥Space registration | ✅ no conflict reported |
 | Microphone prompt for LoqWat itself | ✅ appeared (UserNotificationCenter) and was granted |
 | **Focus:** 26 s recording started from Microsoft Word | ✅ Word stayed frontmost for the whole recording (frontmost-app log, 250 ms polling via `lsappinfo`) |
-| First in-app dictations (25.7 s, 12.5 s) | ❌ whisper error -6 → root-caused to whisper-rs abort callback → fixed in `18d896e`; **retest pending** |
+| First in-app dictations (25.7 s, 12.5 s) | ❌ whisper error -6 → root-caused to whisper-rs abort callback → fixed in `18d896e` |
+| **Retest (fixed build, Yeti mic, from TextEdit)** | ✅ 27.9 s → 271 chars in 784 ms inference / 910 ms total; 2–6 s clips 267–316 ms total |
+| Focus during retest | ✅ TextEdit stayed frontmost through the 28 s recording + transcription; LoqWat came forward only for the result window (by design until Milestone 3) |
+| Esc cancel | ✅ session 5 "capture discarded" |
+| Silence | ✅ sessions 3 and 6 → "no speech (VAD)"; nothing invented |
+| Key repeat (hold ⌥Space ~3 s, toggle mode) | ✅ one session; no rapid duplicate sessions in the log |
+| Hold-to-talk mode | ✅ user-reported working (session 7, 2.7 s) |
 
 Frontmost-app logger used for focus checks:
 ```zsh
@@ -238,3 +235,5 @@ prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | h
 - First user test: the indicator didn't steal focus ✅; transcription failed with whisper error -6 → fixed
   (whisper-rs abort-callback bug), regression test added.
 - **Bookmarked here** before the user restarted. See "RESUME HERE" at the top.
+- **Resumed after the Claude Code restart.** User retest passed (see §6) → Milestone 2 ✅. The user noted the text
+  doesn't go into TextEdit; that's expected until Milestone 3.
