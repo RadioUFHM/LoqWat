@@ -1,0 +1,44 @@
+[package]
+name = "loqwat"
+version = "0.1.0"
+description = "LoqWat — local, private dictation"
+authors = ["Rio <rio@fcitradecraft.com>"]
+edition = "2024"
+rust-version = "1.99"
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name (Windows quirk:
+# https://github.com/rust-lang/cargo/issues/8519)
+name = "loqwat_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Dev/diagnostic tools live in examples/ so they are never bundled into the app:
+#   cargo run --example whisper_info
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# whisper.cpp: Metal on Apple Silicon, CPU elsewhere (Windows GPU backends are later, optional work).
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.16", features = ["metal"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+whisper-rs = { version = "0.16" }
+
+# Size guidance: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+# whisper.cpp is C/C++ built by cmake; keep native code optimized even in dev builds
+# so dev-mode transcription timings are meaningful.
+[profile.dev.package.whisper-rs-sys]
+opt-level = 3
