@@ -1,5 +1,12 @@
 //! LoqWat application entry point.
 
+pub mod audio;
+pub mod capture;
+pub mod engine;
+pub mod metrics;
+pub mod models;
+pub mod vad;
+
 /// Basic engine/build info for the status UI.
 #[tauri::command]
 fn app_info() -> serde_json::Value {

@@ -28,3 +28,4 @@ recordings/
 .idea/
 *.log
 .env
+test-audio/

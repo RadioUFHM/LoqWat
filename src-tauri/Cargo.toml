@@ -22,6 +22,16 @@ tauri-build = { version = "2.7", features = [] }
 tauri = { version = "2.12", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+anyhow = "1.0"
+thiserror = "2.0"
+log = "0.4"
+cpal = "0.18"
+rubato = "5.0"
+hound = "3.5"
+sha2 = "0.11"
+ureq = "3.5"
+dirs = "7.0"
+libc = "0.2"
 
 # whisper.cpp: Metal on Apple Silicon, CPU elsewhere (Windows GPU backends are later, optional work).
 [target.'cfg(target_os = "macos")'.dependencies]
