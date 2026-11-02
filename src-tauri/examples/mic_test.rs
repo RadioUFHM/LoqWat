@@ -58,8 +58,10 @@ fn main() -> Result<()> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let mut line = String::new();
-        let _ = std::io::stdin().lock().read_line(&mut line);
-        let _ = tx.send(());
+        // Only a real Enter stops early; EOF (non-interactive stdin) is ignored.
+        if matches!(std::io::stdin().lock().read_line(&mut line), Ok(n) if n > 0) {
+            let _ = tx.send(());
+        }
     });
     let start = Instant::now();
     let mut max_level = 0.0f32;

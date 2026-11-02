@@ -73,7 +73,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on r
 | # | Milestone | Spec § | Status |
 |---|---|---|---|
 | 0 | Repo + toolchain + Tauri scaffold | 1–2 | ✅ 🧪 release .app built and launched on dev Mac |
-| 1 | Prove transcription (file → mic), benchmark models | 3 | 🟨 file path ✅ 🧪 benchmarked; mic capture built — awaiting user live-speech test |
+| 1 | Prove transcription (file → mic), benchmark models | 3 | ✅ 🧪 file + live mic verified on dev Mac (accuracy pending user confirmation) |
 | 2 | Recording lifecycle / state machine / indicator | 4 | ⬜ |
 | 3 | Mac text insertion + clipboard + recovery window | 5 | ⬜ |
 | 4 | First-run setup, model manager, preferences | 6 | ⬜ |
@@ -134,8 +134,14 @@ Each model ran in a fresh process.
 
 ### Microphone capture
 - Input devices enumerate correctly (Yeti Stereo [default], Headphones, C922 webcam, MacBook Pro mic).
-- Live capture **not yet verified**: the first attempt blocked waiting on the macOS microphone permission
-  dialog for the terminal app. Needs the user to run the mic test.
+- First attempt blocked waiting on the macOS microphone permission dialog for the terminal app; user granted access.
+- Bug: `mic_test` treated stdin EOF (non-interactive `!` shell) as "Enter" and stopped after 0.1 s. Fixed to stop only on a real line.
+- **2026-11-02 live test ✅** (user's real voice, Yeti Stereo Microphone, 2 ch @ 48 kHz, small.en-q5_1 + vocabulary hint + VAD):
+  15.1 s captured, peak 0.154 / RMS 0.021; VAD 5 segments, 14.1 s of speech; **transcribed in 363 ms** (warm),
+  model load 95 ms, warm-up 215 ms, peak RSS 372 MB. FinCEN, OFAC and SAR came out correctly; numbers as digits.
+  The text ended mid-sentence because the 15 s test limit stopped capture (expected). Word-level accuracy is
+  pending the user's confirmation.
+- Silent 3 s room capture: VAD 0 segments → nothing would be inserted ✅.
 
 ## 7. Session log
 
@@ -170,4 +176,6 @@ Each model ran in a fresh process.
 - 12 unit tests (resampling, downmix, digest/size/truncation checks, `.part` cleanup, annotation stripping) pass.
 - Downloaded and verified base.en, small.en, small.en-q5_1, large-v3-turbo-q5_0, silero-v6.2.0.
 - Benchmarks run (see §6). Found the silence hallucination and added the VAD gate. The vocabulary hint fixed the domain terms.
-- Live mic test blocked on the permission dialog → handed to the user.
+- Live mic test blocked on the permission dialog → handed to the user → passed after the stdin-EOF fix (see §6).
+- **Next:** Milestone 2: recording lifecycle state machine, global shortcut (tap, then hold), Escape cancel,
+  session IDs, non-activating indicator.
