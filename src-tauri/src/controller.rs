@@ -48,6 +48,16 @@ pub enum Outcome {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum InsertResult {
+    /// The destination confirmed the change.
+    Inserted,
+    /// Paste was sent but the app can't confirm it; never retried.
+    Unverified,
+    /// Nothing was inserted; keep the text for the recovery window.
+    NotInserted { text: String, reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     ShortcutPressed,
     ShortcutReleased,
@@ -58,8 +68,9 @@ pub enum Event {
     CaptureLimitReached(SessionId),
     CaptureFailed(SessionId, String),
     TranscriptionFinished(SessionId, Outcome),
-    /// `Err(text)` = insertion could not be confirmed; keep text for recovery.
-    InsertFinished(SessionId, Result<(), String>),
+    InsertFinished(SessionId, InsertResult),
+    /// An explicit insert from the recovery window failed; stay in recovery.
+    RecoveryInsertFailed(String),
     EngineStatusChanged(EngineStatus),
     SetMode(RecordMode),
     SetPaused(bool),
@@ -229,13 +240,23 @@ impl Controller {
                     return actions;
                 }
                 match result {
-                    Ok(()) => self.go_idle(None, &mut actions),
-                    Err(text) => {
+                    InsertResult::Inserted => self.go_idle(None, &mut actions),
+                    InsertResult::Unverified => self.go_idle(
+                        Some("Pasted, but this app can't confirm it. Use “Copy Last Transcript” if it's missing.".into()),
+                        &mut actions,
+                    ),
+                    InsertResult::NotInserted { text, reason } => {
                         self.phase = Phase::Recovery;
                         self.recovery_text = Some(text);
-                        self.message = Some("Text was not inserted".into());
+                        self.message = Some(reason);
                         actions.push(Action::Publish);
                     }
+                }
+            }
+            Event::RecoveryInsertFailed(reason) => {
+                if self.phase == Phase::Recovery {
+                    self.message = Some(reason);
+                    actions.push(Action::Publish);
                 }
             }
             Event::EngineStatusChanged(status) => {
@@ -344,7 +365,7 @@ mod tests {
         assert!(a.contains(&Action::SetCancelShortcut(false)));
         assert_eq!(c.phase(), Phase::Inserting);
 
-        c.handle(Event::InsertFinished(1, Ok(())));
+        c.handle(Event::InsertFinished(1, InsertResult::Inserted));
         assert_eq!(c.phase(), Phase::Idle);
     }
 
@@ -496,12 +517,43 @@ mod tests {
             1,
             Outcome::Text("keep me".into()),
         ));
-        c.handle(Event::InsertFinished(1, Err("keep me".into())));
+        c.handle(Event::InsertFinished(
+            1,
+            InsertResult::NotInserted {
+                text: "keep me".into(),
+                reason: "You switched apps".into(),
+            },
+        ));
         assert_eq!(c.phase(), Phase::Recovery);
+        assert_eq!(c.snapshot().message.as_deref(), Some("You switched apps"));
         assert_eq!(c.snapshot().recovery_text.as_deref(), Some("keep me"));
         c.handle(Event::Dismiss);
         assert_eq!(c.phase(), Phase::Idle);
         assert!(c.snapshot().recovery_text.is_none());
+    }
+
+    #[test]
+    fn unverified_insert_returns_to_idle_with_note() {
+        let mut c = ready(RecordMode::Toggle);
+        tap(&mut c);
+        tap(&mut c);
+        c.handle(Event::TranscriptionFinished(1, Outcome::Text("x".into())));
+        c.handle(Event::InsertFinished(1, InsertResult::Unverified));
+        assert_eq!(c.phase(), Phase::Idle);
+        assert!(c.snapshot().message.is_some());
+    }
+
+    #[test]
+    fn stale_insert_result_is_ignored() {
+        let mut c = ready(RecordMode::Toggle);
+        tap(&mut c);
+        tap(&mut c);
+        c.handle(Event::TranscriptionFinished(1, Outcome::Text("x".into())));
+        assert!(
+            c.handle(Event::InsertFinished(7, InsertResult::Inserted))
+                .is_empty()
+        );
+        assert_eq!(c.phase(), Phase::Inserting);
     }
 
     #[test]

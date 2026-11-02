@@ -6,10 +6,12 @@ pub mod controller;
 pub mod engine;
 pub mod metrics;
 pub mod models;
+pub mod platform;
 pub mod runtime;
 pub mod vad;
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::Serialize;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -17,13 +19,16 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-use controller::{EngineStatus, Event, Phase, RecordMode, SessionId, Snapshot};
+use controller::{EngineStatus, Event, InsertResult, Phase, RecordMode, SessionId, Snapshot};
+use platform::{InsertOutcome, Target};
 use runtime::{Hooks, Runtime};
 
 /// Default dictation shortcut (configurable in preferences later).
 const DICTATE_SHORTCUT: &str = "Alt+Space";
 const CANCEL_SHORTCUT: &str = "Escape";
 const INDICATOR_SIZE: (f64, f64) = (220.0, 44.0);
+/// Countdown before an explicit "insert into another field" from recovery.
+const RECOVERY_INSERT_DELAY: Duration = Duration::from_secs(3);
 
 /// Everything the UI shows.
 #[derive(Debug, Clone, Serialize)]
@@ -34,12 +39,18 @@ struct UiState {
     shortcut_error: Option<String>,
     model: Option<String>,
     version: &'static str,
+    accessibility: bool,
+    has_last_text: bool,
 }
 
 #[derive(Default)]
 struct Shell {
     shortcut_error: Mutex<Option<String>>,
     model: Option<String>,
+    /// Where the user was typing when the current session started.
+    target: Mutex<Option<(SessionId, Target)>>,
+    /// Most recent transcript, memory only, for "Copy Last Transcript".
+    last_text: Mutex<Option<String>>,
 }
 
 struct TrayItems {
@@ -48,6 +59,7 @@ struct TrayItems {
     mode_toggle: CheckMenuItem<tauri::Wry>,
     mode_hold: CheckMenuItem<tauri::Wry>,
     pause: CheckMenuItem<tauri::Wry>,
+    copy_last: MenuItem<tauri::Wry>,
 }
 
 fn ui_state(app: &AppHandle, snapshot: Snapshot) -> UiState {
@@ -58,6 +70,8 @@ fn ui_state(app: &AppHandle, snapshot: Snapshot) -> UiState {
         shortcut_error: shell.shortcut_error.lock().unwrap().clone(),
         model: shell.model.clone(),
         version: env!("CARGO_PKG_VERSION"),
+        accessibility: platform::accessibility_trusted(false),
+        has_last_text: shell.last_text.lock().unwrap().is_some(),
     }
 }
 
@@ -94,14 +108,78 @@ impl Hooks for AppHooks {
         }
     }
 
+    fn session_started(&self, session: SessionId) {
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            let target = platform::capture_target();
+            if let Some(t) = &target {
+                log::info!(
+                    "session {session}: target {} (field known: {})",
+                    t.bundle_id.as_deref().unwrap_or(&t.app_name),
+                    t.field_known
+                );
+            }
+            *app.state::<Shell>().target.lock().unwrap() = target.map(|t| (session, t));
+        });
+    }
+
     fn insert(&self, runtime: Runtime, session: SessionId, text: String) {
-        // Milestone 2: no text insertion yet. Hand the transcript to the
-        // recovery path (memory only) instead of claiming it was inserted.
-        runtime.dispatch(Event::InsertFinished(session, Err(text)));
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            let shell = app.state::<Shell>();
+            *shell.last_text.lock().unwrap() = Some(text.clone());
+            let target = shell
+                .target
+                .lock()
+                .unwrap()
+                .take()
+                .filter(|(s, _)| *s == session)
+                .map(|(_, t)| t);
+            let result = deliver(target.as_ref(), text);
+            log::info!(
+                "session {session}: insert → {}",
+                match &result {
+                    InsertResult::Inserted => "confirmed".to_string(),
+                    InsertResult::Unverified => "sent, unverified".to_string(),
+                    InsertResult::NotInserted { reason, .. } => format!("not inserted ({reason})"),
+                }
+            );
+            runtime.dispatch(Event::InsertFinished(session, result));
+        });
     }
 
     fn level(&self, level: f32) {
         let _ = self.app.emit_to("indicator", "level", level);
+    }
+}
+
+/// Insert into the captured target after revalidating it. Any doubt about the
+/// destination goes to the recovery window instead of guessing.
+fn deliver(target: Option<&Target>, text: String) -> InsertResult {
+    let not_inserted = |reason: String| InsertResult::NotInserted {
+        text: text.clone(),
+        reason,
+    };
+    if !platform::accessibility_trusted(false) {
+        return not_inserted(platform::TargetCheck::NoPermission.reason());
+    }
+    let Some(target) = target else {
+        return not_inserted(
+            "LoqWat couldn't tell where you were typing when recording started.".into(),
+        );
+    };
+    // ⌥ from the shortcut must be up, or ⌘V would become ⌥⌘V.
+    if !platform::wait_for_modifiers_released(Duration::from_secs(2)) {
+        return not_inserted("Modifier keys were still held down, so LoqWat didn't paste.".into());
+    }
+    let check = platform::check_target(Some(target));
+    if !check.allows_insert() {
+        return not_inserted(check.reason());
+    }
+    match platform::insert_text(&text) {
+        InsertOutcome::Confirmed => InsertResult::Inserted,
+        InsertOutcome::Unverified => InsertResult::Unverified,
+        InsertOutcome::Failed(e) => not_inserted(format!("Paste failed: {e}.")),
     }
 }
 
@@ -141,6 +219,8 @@ fn update_tray(app: &AppHandle, s: &Snapshot) {
     let _ = items.mode_toggle.set_checked(s.mode == RecordMode::Toggle);
     let _ = items.mode_hold.set_checked(s.mode == RecordMode::Hold);
     let _ = items.pause.set_checked(s.paused);
+    let has_last = app.state::<Shell>().last_text.lock().unwrap().is_some();
+    let _ = items.copy_last.set_enabled(has_last);
     if let Some(tray) = app.tray_by_id("main") {
         let title = match s.phase {
             Phase::Recording => Some("● REC"),
@@ -213,6 +293,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let mode_hold =
         CheckMenuItem::with_id(app, "mode_hold", "Hold to talk", true, false, None::<&str>)?;
     let pause = CheckMenuItem::with_id(app, "pause", "Pause Shortcut", true, false, None::<&str>)?;
+    let copy_last = MenuItem::with_id(
+        app,
+        "copy_last",
+        "Copy Last Transcript",
+        false,
+        None::<&str>,
+    )?;
     let open = MenuItem::with_id(app, "open", "Open LoqWat…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit LoqWat", true, None::<&str>)?;
     let menu = Menu::with_items(
@@ -226,6 +313,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &mode_hold,
             &pause,
             &PredefinedMenuItem::separator(app)?,
+            &copy_last,
             &open,
             &quit,
         ],
@@ -245,6 +333,11 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                     let paused = rt.snapshot().paused;
                     rt.dispatch(Event::SetPaused(!paused));
                 }
+                "copy_last" => {
+                    if let Some(t) = app.state::<Shell>().last_text.lock().unwrap().as_deref() {
+                        platform::copy_to_clipboard(t);
+                    }
+                }
                 "open" => show_main_window(app),
                 "quit" => {
                     rt.shutdown();
@@ -260,6 +353,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         mode_toggle,
         mode_hold,
         pause,
+        copy_last,
     });
     Ok(())
 }
@@ -307,6 +401,64 @@ fn dismiss(rt: tauri::State<Runtime>) {
     rt.dispatch(Event::Dismiss);
 }
 
+/// Recovery: copy the held transcript at the user's request, then clear it.
+#[tauri::command]
+fn copy_recovery(rt: tauri::State<Runtime>) -> bool {
+    let Some(text) = rt.snapshot().recovery_text else {
+        return false;
+    };
+    let ok = platform::copy_to_clipboard(&text);
+    if ok {
+        rt.dispatch(Event::Dismiss);
+    }
+    ok
+}
+
+/// Recovery: hide LoqWat, give the user a few seconds to click into the
+/// destination, then insert there (still refusing password fields).
+#[tauri::command]
+fn insert_recovery(app: AppHandle, rt: tauri::State<Runtime>) {
+    let Some(text) = rt.snapshot().recovery_text else {
+        return;
+    };
+    let rt = rt.inner().clone();
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+    std::thread::spawn(move || {
+        std::thread::sleep(RECOVERY_INSERT_DELAY);
+        let failure = if !platform::wait_for_modifiers_released(Duration::from_secs(2)) {
+            Some("Modifier keys were held down, so LoqWat didn't paste.".to_string())
+        } else {
+            let check = platform::check_target(None);
+            if check.allows_insert() {
+                match platform::insert_text(&text) {
+                    InsertOutcome::Confirmed | InsertOutcome::Unverified => None,
+                    InsertOutcome::Failed(e) => Some(format!("Paste failed: {e}.")),
+                }
+            } else {
+                Some(check.reason())
+            }
+        };
+        match failure {
+            None => rt.dispatch(Event::Dismiss),
+            Some(reason) => {
+                rt.dispatch(Event::RecoveryInsertFailed(reason));
+                show_main_window(&app);
+            }
+        }
+    });
+}
+
+#[tauri::command]
+fn grant_accessibility() -> bool {
+    let trusted = platform::accessibility_trusted(true);
+    if !trusted {
+        platform::open_accessibility_settings();
+    }
+    trusted
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("loqwat_lib=info"))
@@ -319,7 +471,10 @@ pub fn run() {
             toggle_dictation,
             set_mode,
             set_paused,
-            dismiss
+            dismiss,
+            copy_recovery,
+            insert_recovery,
+            grant_accessibility
         ])
         .setup(|app| {
             // Menu bar utility: no Dock icon, and never becomes the active app
@@ -329,6 +484,8 @@ pub fn run() {
 
             let config = runtime::default_config();
             app.manage(Shell {
+                target: Mutex::new(None),
+                last_text: Mutex::new(None),
                 shortcut_error: Mutex::new(None),
                 model: config
                     .model_path

@@ -38,6 +38,14 @@ libc = "0.2"
 # whisper.cpp: Metal on Apple Silicon, CPU elsewhere (Windows GPU backends are later, optional work).
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16", features = ["metal"] }
+# Native macOS integration: Accessibility (target capture), CGEvent (paste),
+# NSPasteboard (clipboard save/restore), NSWorkspace (frontmost app).
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-application-services = "0.3"
+objc2-core-graphics = "0.3"
+objc2-core-foundation = "0.3"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 whisper-rs = { version = "0.16" }

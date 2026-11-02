@@ -14,6 +14,14 @@
         <span id="phase" class="pill">Starting…</span>
       </header>
 
+      <section class="card warn" id="ax-card" hidden>
+        <strong>Allow LoqWat to type for you</strong>
+        <p class="hint">To put dictated text into other apps, macOS needs you to turn on LoqWat under
+          System Settings → Privacy &amp; Security → Accessibility. LoqWat uses it only to find the text
+          field you're in and to paste; it never reads your documents.</p>
+        <div class="row"><span></span><button id="grant-ax">Open Accessibility Settings…</button></div>
+      </section>
+
       <section class="card">
         <div class="row"><span>Shortcut</span><kbd id="shortcut">—</kbd></div>
         <div class="row"><span>Model</span><span id="model" class="mono">—</span></div>
@@ -37,10 +45,18 @@
       </section>
 
       <section class="card" id="result-card" hidden>
-        <div class="row"><strong id="result-title">Transcript</strong><button id="dismiss">Discard</button></div>
+        <div class="row"><strong id="result-title">Transcript</strong></div>
         <p id="message" class="message"></p>
         <textarea id="result" readonly rows="5"></textarea>
-        <p class="hint">Kept in memory only. Automatic insertion into other apps arrives in Milestone 3; for now, select and copy from here.</p>
+        <div class="row actions" id="recovery-actions">
+          <button id="copy">Copy</button>
+          <button id="insert-elsewhere" title="LoqWat hides, you click into a text field, and it inserts after 3 seconds">Insert into a field…</button>
+          <button id="dismiss">Discard</button>
+        </div>
+        <p id="countdown" class="hint" hidden>Click into the text field where you want the text. Inserting in 3 seconds…</p>
+        <p class="hint" id="clip-note">Kept in memory only and cleared when you discard it or quit. Copy and insert both go through the
+          system clipboard, which clipboard-history or sync tools may record. LoqWat restores your previous
+          clipboard after inserting.</p>
       </section>
 
       <footer id="version" class="mono"></footer>

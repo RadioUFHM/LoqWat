@@ -24,6 +24,8 @@ use crate::vad::SpeechDetector;
 
 pub trait Hooks: Send + Sync + 'static {
     fn publish(&self, snapshot: &Snapshot);
+    /// Recording started: capture where the user is typing.
+    fn session_started(&self, session: SessionId);
     fn set_cancel_shortcut(&self, enabled: bool);
     /// Deliver text. Must eventually dispatch `Event::InsertFinished`.
     fn insert(&self, runtime: Runtime, session: SessionId, text: String);
@@ -114,6 +116,7 @@ impl Runtime {
     fn perform(&self, action: Action) {
         match action {
             Action::StartCapture(s) => {
+                self.inner.hooks.session_started(s);
                 let _ = self.inner.audio_tx.send(AudioCmd::Start(s));
             }
             Action::StopCapture(s) => {
