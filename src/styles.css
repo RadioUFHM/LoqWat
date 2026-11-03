@@ -34,3 +34,29 @@ button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid
 button:disabled { opacity: 0.5; cursor: default; }
 .card.warn { border-color: #ff9f0a; }
 .actions { justify-content: flex-end; }
+
+/* Milestone 4: tabs, setup, preferences, models */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.tabs button { border: none; border-radius: 6px 6px 0 0; background: transparent; padding: 6px 12px; color: var(--muted); }
+.tabs button[aria-selected="true"] { color: inherit; background: var(--card); border: 1px solid var(--border); border-bottom-color: var(--card); margin-bottom: -1px; font-weight: 500; }
+.tab { display: flex; flex-direction: column; gap: 12px; }
+.tab[hidden] { display: none; }
+.lead { margin: 0; }
+.step .check { display: inline-block; width: 1.2em; color: var(--muted); }
+.step.done { border-color: #30d158; }
+.step.done .check { color: #30d158; }
+select { font: inherit; flex: 1; min-width: 0; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: inherit; }
+.meter { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.meter.small { width: 90px; }
+.meter-fill { height: 100%; width: 0%; background: #30d158; transition: width 80ms linear; }
+button.primary { background: #0a84ff; border-color: #0a84ff; color: white; }
+.model-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); }
+.model-row:first-of-type { border-top: none; }
+.model-info { min-width: 0; }
+.model-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--border); }
+#model-list { display: flex; flex-direction: column; gap: 2px; }
+#model-list > strong:not(:first-child) { margin-top: 10px; }
+#models-usage { word-break: break-all; }
+label { display: flex; align-items: center; gap: 6px; }
+.seg label { display: inline-flex; }

@@ -14,49 +14,177 @@
         <span id="phase" class="pill">Starting…</span>
       </header>
 
-      <section class="card warn" id="ax-card" hidden>
-        <strong>Allow LoqWat to type for you</strong>
-        <p class="hint">To put dictated text into other apps, macOS needs you to turn on LoqWat under
-          System Settings → Privacy &amp; Security → Accessibility. LoqWat uses it only to find the text
-          field you're in and to paste; it never reads your documents.</p>
-        <div class="row"><span></span><button id="grant-ax">Open Accessibility Settings…</button></div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="status">Status</button>
+        <button role="tab" data-tab="setup">Setup</button>
+        <button role="tab" data-tab="prefs">Preferences</button>
+        <button role="tab" data-tab="models">Models</button>
+      </nav>
+
+      <!-- ============================== Status -->
+      <section class="tab" data-panel="status">
+        <section class="card warn ax-card" hidden>
+          <strong>Allow LoqWat to type for you</strong>
+          <p class="hint">To put dictated text into other apps, macOS needs you to turn on LoqWat under
+            System Settings → Privacy &amp; Security → Accessibility. LoqWat uses it only to find the text
+            field you're in and to paste; it never reads your documents.</p>
+          <div class="row"><span></span><button class="grant-ax">Open Accessibility Settings…</button></div>
+        </section>
+
+        <section class="card">
+          <div class="row"><span>Shortcut</span><kbd class="shortcut-kbd">—</kbd></div>
+          <div class="row"><span>Model</span><span class="model-label">—</span></div>
+          <div class="row"><span>Engine</span><span class="engine-label">—</span></div>
+          <p class="error shortcut-error" hidden></p>
+        </section>
+
+        <section class="card">
+          <div class="row">
+            <label><input type="checkbox" class="paused" /> Pause shortcut</label>
+            <button id="toggle">Start Dictation</button>
+          </div>
+          <p class="hint">Esc cancels while listening or transcribing. Pausing frees the shortcut for other apps.</p>
+        </section>
+
+        <section class="card" id="result-card" hidden>
+          <div class="row"><strong id="result-title">Transcript</strong></div>
+          <p id="message" class="message"></p>
+          <textarea id="result" readonly rows="5"></textarea>
+          <div class="row actions" id="recovery-actions">
+            <button id="copy">Copy</button>
+            <button id="insert-elsewhere" title="LoqWat hides, you click into a text field, and it inserts after 3 seconds">Insert into a field…</button>
+            <button id="dismiss">Discard</button>
+          </div>
+          <p id="countdown" class="hint" hidden>Click into the text field where you want the text. Inserting in 3 seconds…</p>
+          <p class="hint" id="clip-note">Kept in memory only and cleared when you discard it or quit. Copy and insert both go through the
+            system clipboard, which clipboard-history or sync tools may record. LoqWat restores your previous
+            clipboard after inserting.</p>
+        </section>
       </section>
 
-      <section class="card">
-        <div class="row"><span>Shortcut</span><kbd id="shortcut">—</kbd></div>
-        <div class="row"><span>Model</span><span id="model" class="mono">—</span></div>
-        <div class="row"><span>Engine</span><span id="engine">—</span></div>
-        <p id="shortcut-error" class="error" hidden></p>
+      <!-- ============================== Setup -->
+      <section class="tab" data-panel="setup" hidden>
+        <p class="lead">Four quick steps. Everything runs on this Mac. Nothing you say leaves it.</p>
+
+        <section class="card step" id="step-mic">
+          <div class="row"><strong><span class="check"></span> 1. Microphone</strong></div>
+          <div class="row">
+            <select class="mic-select" aria-label="Microphone"></select>
+            <button class="mic-test">Test</button>
+          </div>
+          <div class="meter"><div class="meter-fill"></div></div>
+          <p class="hint mic-result">Click Test and say a few words. macOS may ask to allow the microphone.</p>
+        </section>
+
+        <section class="card step" id="step-ax">
+          <div class="row"><strong><span class="check"></span> 2. Permission to type</strong></div>
+          <p class="hint">LoqWat pastes your words into the app you're using. macOS calls this Accessibility access.</p>
+          <div class="row"><span class="ax-status hint"></span><button class="grant-ax">Open Accessibility Settings…</button></div>
+        </section>
+
+        <section class="card step" id="step-model">
+          <div class="row"><strong><span class="check"></span> 3. Speech model</strong></div>
+          <p class="hint setup-model-text"></p>
+          <div class="row">
+            <span class="setup-model-progress hint"></span>
+            <span>
+              <button id="setup-download">Download (190 MB)</button>
+              <button class="cancel-download" hidden>Cancel</button>
+            </span>
+          </div>
+          <div class="meter" id="setup-dl-meter" hidden><div class="meter-fill"></div></div>
+          <p class="hint">Other sizes, or a file you already have: see the Models tab.</p>
+        </section>
+
+        <section class="card step" id="step-shortcut">
+          <div class="row"><strong><span class="check"></span> 4. Shortcut</strong></div>
+          <div class="row">
+            <kbd class="shortcut-kbd">—</kbd>
+            <button class="shortcut-change">Change…</button>
+          </div>
+          <p class="hint shortcut-msg">Press it once to start listening and again to stop (or hold it, in hold-to-talk mode).</p>
+          <p class="error shortcut-error" hidden></p>
+        </section>
+
+        <div class="row actions">
+          <button id="setup-later">Later</button>
+          <button id="setup-done" class="primary">Done</button>
+        </div>
       </section>
 
-      <section class="card">
-        <div class="row">
-          <span>Recording mode</span>
-          <span class="seg">
-            <label><input type="radio" name="mode" value="toggle" /> Press / press</label>
-            <label><input type="radio" name="mode" value="hold" /> Hold to talk</label>
-          </span>
-        </div>
-        <div class="row">
-          <label><input type="checkbox" id="paused" /> Pause shortcut</label>
-          <button id="toggle">Start Dictation</button>
-        </div>
-        <p class="hint">Esc cancels while listening or transcribing.</p>
+      <!-- ============================== Preferences -->
+      <section class="tab" data-panel="prefs" hidden>
+        <section class="card">
+          <strong>Microphone</strong>
+          <div class="row">
+            <select class="mic-select" aria-label="Microphone"></select>
+            <button class="mic-test">Test</button>
+          </div>
+          <div class="meter"><div class="meter-fill"></div></div>
+          <p class="hint mic-result"></p>
+        </section>
+
+        <section class="card">
+          <strong>Shortcut</strong>
+          <div class="row">
+            <kbd class="shortcut-kbd">—</kbd>
+            <button class="shortcut-change">Change…</button>
+          </div>
+          <p class="hint shortcut-msg"></p>
+          <p class="error shortcut-error" hidden></p>
+          <div class="row">
+            <span>Recording mode</span>
+            <span class="seg">
+              <label><input type="radio" name="mode" value="toggle" /> Press / press</label>
+              <label><input type="radio" name="mode" value="hold" /> Hold to talk</label>
+            </span>
+          </div>
+          <label><input type="checkbox" class="paused" /> Pause shortcut</label>
+        </section>
+
+        <section class="card">
+          <strong>Vocabulary hints</strong>
+          <p class="hint">Names and terms you use often, one per line. They make recognition more likely, not
+            guaranteed, and LoqWat never forces them into what you said.</p>
+          <textarea id="vocab" rows="6" spellcheck="false"></textarea>
+          <div class="row">
+            <span id="vocab-msg" class="hint"></span>
+            <span>
+              <button id="vocab-reset">Reset</button>
+              <button id="vocab-save">Save</button>
+            </span>
+          </div>
+        </section>
+
+        <section class="card">
+          <label><input type="checkbox" id="sound-cues" /> Play a sound when listening starts and stops</label>
+          <label><input type="checkbox" id="login" /> Open LoqWat when I log in</label>
+          <p class="error" id="login-error" hidden></p>
+        </section>
+
+        <div class="row actions"><button id="quit">Quit LoqWat</button></div>
       </section>
 
-      <section class="card" id="result-card" hidden>
-        <div class="row"><strong id="result-title">Transcript</strong></div>
-        <p id="message" class="message"></p>
-        <textarea id="result" readonly rows="5"></textarea>
-        <div class="row actions" id="recovery-actions">
-          <button id="copy">Copy</button>
-          <button id="insert-elsewhere" title="LoqWat hides, you click into a text field, and it inserts after 3 seconds">Insert into a field…</button>
-          <button id="dismiss">Discard</button>
-        </div>
-        <p id="countdown" class="hint" hidden>Click into the text field where you want the text. Inserting in 3 seconds…</p>
-        <p class="hint" id="clip-note">Kept in memory only and cleared when you discard it or quit. Copy and insert both go through the
-          system clipboard, which clipboard-history or sync tools may record. LoqWat restores your previous
-          clipboard after inserting.</p>
+      <!-- ============================== Models -->
+      <section class="tab" data-panel="models" hidden>
+        <section class="card">
+          <div class="row"><span>Engine</span><span class="engine-label">—</span></div>
+          <div class="row"><span>In use</span><span class="model-label">—</span></div>
+        </section>
+        <section class="card">
+          <div id="model-list"></div>
+          <p class="error" id="models-error" hidden></p>
+        </section>
+        <section class="card">
+          <div class="row">
+            <span class="hint" id="models-usage"></span>
+            <span>
+              <button id="models-reveal">Show in Finder</button>
+              <button id="models-import">Import file…</button>
+            </span>
+          </div>
+          <p class="hint" id="models-source"></p>
+        </section>
       </section>
 
       <footer id="version" class="mono"></footer>

@@ -32,3 +32,7 @@ pub fn insert_text(_text: &str) -> InsertOutcome {
 pub fn copy_to_clipboard(_text: &str) -> bool {
     false
 }
+
+pub fn play_cue(_cue: super::Cue) -> bool {
+    false
+}

@@ -110,3 +110,28 @@ pub fn insert_text(text: &str) -> InsertOutcome {
 pub fn copy_to_clipboard(text: &str) -> bool {
     imp::copy_to_clipboard(text)
 }
+
+/// Optional audible cues for recording start/stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cue {
+    Start,
+    Stop,
+    Cancel,
+}
+
+/// Play a short sound cue (best effort).
+pub fn play_cue(cue: Cue) -> bool {
+    imp::play_cue(cue)
+}
+
+/// Show a folder in the system file manager. Arguments go straight to the
+/// process (no shell), so paths are never interpreted.
+pub fn reveal_folder(path: &std::path::Path) -> bool {
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let program = "xdg-open";
+    std::process::Command::new(program).arg(path).spawn().is_ok()
+}

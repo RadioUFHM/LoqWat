@@ -317,6 +317,16 @@ pub fn insert_text(text: &str) -> InsertOutcome {
     outcome
 }
 
+/// Play a short built-in system sound. Returns false if it couldn't play.
+pub fn play_cue(cue: super::Cue) -> bool {
+    let name = match cue {
+        super::Cue::Start => "Tink",
+        super::Cue::Stop => "Pop",
+        super::Cue::Cancel => "Bottle",
+    };
+    objc2_app_kit::NSSound::soundNamed(&NSString::from_str(name)).is_some_and(|s| s.play())
+}
+
 pub fn copy_to_clipboard(text: &str) -> bool {
     write_text(&NSPasteboard::generalPasteboard(), text, false)
 }

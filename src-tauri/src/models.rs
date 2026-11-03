@@ -137,7 +137,11 @@ pub fn verify(info: &ModelInfo, path: &Path) -> Result<()> {
             info.size
         );
     }
-    let mut file = File::open(path)?;
+    check_digest(info, &file_sha256(path)?)
+}
+
+fn file_sha256(path: &Path) -> Result<String> {
+    let mut file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 1 << 20];
     loop {
@@ -147,7 +151,57 @@ pub fn verify(info: &ModelInfo, path: &Path) -> Result<()> {
         }
         hasher.update(&buf[..n]);
     }
-    check_digest(info, &hex(&hasher.finalize()))
+    Ok(hex(&hasher.finalize()))
+}
+
+/// Import a model file the user already has (e.g. downloaded on another
+/// machine). Only files that exactly match a catalog entry (size + SHA-256)
+/// are accepted, so an imported file is as trustworthy as a download.
+/// Copied via `<file>.part` and renamed, like a download.
+pub fn import(source: &Path, dir: &Path) -> Result<&'static ModelInfo> {
+    let all: Vec<&'static ModelInfo> = CATALOG.iter().chain(std::iter::once(&VAD_MODEL)).collect();
+    import_from(&all, source, dir)
+}
+
+fn import_from(
+    catalog: &[&'static ModelInfo],
+    source: &Path,
+    dir: &Path,
+) -> Result<&'static ModelInfo> {
+    let len = fs::metadata(source)
+        .with_context(|| format!("reading {}", source.display()))?
+        .len();
+    let candidates: Vec<_> = catalog.iter().filter(|m| m.size == len).collect();
+    if candidates.is_empty() {
+        bail!("this file doesn't match any model LoqWat knows (size {len} bytes)");
+    }
+    let digest = file_sha256(source)?;
+    let Some(info) = candidates.into_iter().find(|m| m.sha256 == digest) else {
+        bail!("this file doesn't match any model LoqWat knows (checksum differs)");
+    };
+    fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let part = dir.join(format!("{}.part", info.file));
+    let result = (|| -> Result<()> {
+        fs::copy(source, &part).context("copying model file")?;
+        verify(info, &part)?;
+        File::open(&part)?.sync_all()?;
+        fs::rename(&part, info.path_in(dir)).context("finalizing model file")?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&part);
+    }
+    result.map(|()| *info)
+}
+
+/// Delete an installed model file.
+pub fn remove(info: &ModelInfo, dir: &Path) -> Result<()> {
+    let p = info.path_in(dir);
+    match fs::remove_file(&p) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("removing {}", p.display())),
+    }
 }
 
 fn check_digest(info: &ModelInfo, actual: &str) -> Result<()> {
@@ -301,6 +355,39 @@ mod tests {
         assert_eq!(clean_partial_downloads(&dir).unwrap(), 1);
         assert!(dir.join("a.bin").exists());
         assert!(!dir.join("a.bin.part").exists());
+    }
+
+    static HELLO_REF: ModelInfo = HELLO;
+
+    #[test]
+    fn import_accepts_only_matching_files() {
+        let src_dir = temp_dir("import-src");
+        let dst = temp_dir("import-dst");
+        let good = src_dir.join("whatever.bin");
+        fs::write(&good, b"hello").unwrap();
+        let info = import_from(&[&HELLO_REF], &good, &dst).unwrap();
+        assert_eq!(info.id, "test");
+        assert_eq!(fs::read(dst.join("test.bin")).unwrap(), b"hello");
+        assert!(!dst.join("test.bin.part").exists());
+
+        let wrong_hash = src_dir.join("bad.bin");
+        fs::write(&wrong_hash, b"hellO").unwrap();
+        let dst2 = temp_dir("import-dst2");
+        assert!(import_from(&[&HELLO_REF], &wrong_hash, &dst2).is_err());
+        assert!(fs::read_dir(&dst2).unwrap().next().is_none(), "nothing left behind");
+
+        let wrong_size = src_dir.join("short.bin");
+        fs::write(&wrong_size, b"hi").unwrap();
+        assert!(import_from(&[&HELLO_REF], &wrong_size, &dst2).is_err());
+    }
+
+    #[test]
+    fn remove_is_idempotent() {
+        let dir = temp_dir("remove");
+        fs::write(dir.join("test.bin"), b"hello").unwrap();
+        remove(&HELLO, &dir).unwrap();
+        assert!(!dir.join("test.bin").exists());
+        remove(&HELLO, &dir).unwrap();
     }
 
     #[test]

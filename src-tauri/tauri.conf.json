@@ -15,9 +15,12 @@
       {
         "label": "main",
         "title": "LoqWat",
-        "width": 460,
-        "height": 560,
-        "resizable": true
+        "width": 520,
+        "height": 640,
+        "resizable": true,
+        "minWidth": 440,
+        "minHeight": 480,
+        "visible": false
       }
     ],
     "security": {

@@ -62,7 +62,7 @@ impl Recording {
                 .input_devices()
                 .context("enumerating input devices")?
                 .find(|d| device_name(d).as_deref() == Some(name))
-                .ok_or_else(|| anyhow!("input device \"{name}\" not found"))?,
+                .ok_or_else(|| anyhow!("microphone \"{name}\" isn't connected. Reconnect it, or choose another microphone in LoqWat's Preferences"))?,
             None => host
                 .default_input_device()
                 .ok_or_else(|| anyhow!("no microphone / input device available"))?,

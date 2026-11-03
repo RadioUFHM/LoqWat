@@ -61,6 +61,9 @@ struct Inner {
     engine_tx: Sender<EngineCmd>,
     /// Cancel flag for the session currently being transcribed.
     cancel: Mutex<Option<(SessionId, Arc<AtomicBool>)>>,
+    /// Current configuration. The audio thread reads it at each recording
+    /// start; the engine thread at each load and job.
+    config: Mutex<Config>,
     hooks: Box<dyn Hooks>,
 }
 
@@ -79,26 +82,42 @@ impl Runtime {
                 audio_tx,
                 engine_tx,
                 cancel: Mutex::new(None),
+                config: Mutex::new(config),
                 hooks: Box::new(hooks),
             }),
         };
         {
             let rt = rt.clone();
-            let cfg = config.clone();
             std::thread::Builder::new()
                 .name("loqwat-audio".into())
-                .spawn(move || audio_thread(rt, cfg, audio_rx))
+                .spawn(move || audio_thread(rt, audio_rx))
                 .expect("spawn audio thread");
         }
         {
             let rt = rt.clone();
             std::thread::Builder::new()
                 .name("loqwat-engine".into())
-                .spawn(move || engine_thread(rt, config, engine_rx))
+                .spawn(move || engine_thread(rt, engine_rx))
                 .expect("spawn engine thread");
         }
         let _ = rt.inner.engine_tx.send(EngineCmd::Load);
         rt
+    }
+
+    pub fn config(&self) -> Config {
+        self.inner.config.lock().unwrap().clone()
+    }
+
+    /// Change the configuration. Microphone and vocabulary changes apply to
+    /// the next recording; a model change needs [`Runtime::reload_engine`].
+    pub fn update_config(&self, f: impl FnOnce(&mut Config)) {
+        f(&mut self.inner.config.lock().unwrap());
+    }
+
+    /// Unload the current model and load the configured one. Queued after any
+    /// transcription already in progress.
+    pub fn reload_engine(&self) {
+        let _ = self.inner.engine_tx.send(EngineCmd::Load);
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -148,7 +167,7 @@ impl Runtime {
     }
 }
 
-fn audio_thread(rt: Runtime, cfg: Config, rx: Receiver<AudioCmd>) {
+fn audio_thread(rt: Runtime, rx: Receiver<AudioCmd>) {
     let mut active: Option<(SessionId, Recording)> = None;
     let mut limit_sent = false;
     let mut error_sent = false;
@@ -158,7 +177,11 @@ fn audio_thread(rt: Runtime, cfg: Config, rx: Receiver<AudioCmd>) {
                 active = None; // release any previous stream first
                 limit_sent = false;
                 error_sent = false;
-                match Recording::start(cfg.input_device.as_deref(), cfg.max_secs) {
+                let (device, max_secs) = {
+                    let c = rt.inner.config.lock().unwrap();
+                    (c.input_device.clone(), c.max_secs)
+                };
+                match Recording::start(device.as_deref(), max_secs) {
                     Ok(rec) => {
                         log::info!(
                             "session {s}: recording from {} ({} ch @ {} Hz)",
@@ -218,16 +241,15 @@ struct LoadedEngine {
     vad: Option<SpeechDetector>,
 }
 
-fn engine_thread(rt: Runtime, cfg: Config, rx: Receiver<EngineCmd>) {
+fn engine_thread(rt: Runtime, rx: Receiver<EngineCmd>) {
     let mut loaded: Option<LoadedEngine> = None;
-    let opts = TranscribeOptions {
-        initial_prompt: (!cfg.vocabulary.is_empty()).then(|| cfg.vocabulary.join(", ") + "."),
-        ..Default::default()
-    };
     while let Ok(cmd) = rx.recv() {
         match cmd {
             EngineCmd::Load => {
+                // Free the old model before loading the next one.
+                loaded = None;
                 rt.dispatch(Event::EngineStatusChanged(EngineStatus::Loading));
+                let cfg = rt.config();
                 match load_engine(&cfg) {
                     Ok(l) => {
                         loaded = Some(l);
@@ -244,7 +266,15 @@ fn engine_thread(rt: Runtime, cfg: Config, rx: Receiver<EngineCmd>) {
             EngineCmd::Transcribe(s, audio, cancel) => {
                 let outcome = match loaded.as_mut() {
                     None => Outcome::Failed("transcription engine is not available".into()),
-                    Some(l) => run_job(l, s, &audio, &opts, cancel),
+                    Some(l) => {
+                        let vocabulary = rt.config().vocabulary;
+                        let opts = TranscribeOptions {
+                            initial_prompt: (!vocabulary.is_empty())
+                                .then(|| vocabulary.join(", ") + "."),
+                            ..Default::default()
+                        };
+                        run_job(l, s, &audio, &opts, cancel)
+                    }
                 };
                 rt.dispatch(Event::TranscriptionFinished(s, outcome));
             }
@@ -330,31 +360,40 @@ fn run_job(
     }
 }
 
-/// Default vocabulary hints (editable in preferences later).
-pub const DEFAULT_VOCABULARY: &[&str] = &["FCI Tradecraft", "FinCEN", "BSA", "AML", "KYC", "OFAC"];
+/// Model ids tried, in order, when the chosen model isn't installed.
+pub const MODEL_FALLBACK_ORDER: &[&str] = &[
+    "small.en-q5_1",
+    "small.en",
+    "base.en",
+    "large-v3-turbo-q5_0",
+    "medium.en-q5_0",
+    "tiny.en",
+];
 
-/// Pick the preferred installed model, falling back to any installed one.
-pub fn default_config() -> Config {
-    let dir = crate::models::models_dir().ok();
-    let installed = |id: &str| {
-        let dir = dir.as_ref()?;
-        let p = crate::models::find(id)?.path_in(dir);
-        p.exists().then_some(p)
-    };
-    let model_path = [
-        "small.en-q5_1",
-        "small.en",
-        "base.en",
-        "large-v3-turbo-q5_0",
-    ]
-    .iter()
-    .find_map(|id| installed(id));
+/// Path of an installed catalog model, if present.
+pub fn installed_model_path(id: &str) -> Option<PathBuf> {
+    let dir = crate::models::models_dir().ok()?;
+    let p = crate::models::find(id)?.path_in(&dir);
+    p.is_file().then_some(p)
+}
+
+/// Resolve the model to use: the chosen one if installed, else the first
+/// installed model in [`MODEL_FALLBACK_ORDER`]. Returns (id, path).
+pub fn resolve_model(chosen: Option<&str>) -> Option<(String, PathBuf)> {
+    chosen
+        .into_iter()
+        .chain(MODEL_FALLBACK_ORDER.iter().copied())
+        .find_map(|id| installed_model_path(id).map(|p| (id.to_string(), p)))
+}
+
+/// Build the runtime configuration from saved settings.
+pub fn config_from(settings: &crate::settings::Settings) -> Config {
     Config {
-        model_path,
-        vad_path: installed(crate::models::VAD_MODEL.id),
-        vocabulary: DEFAULT_VOCABULARY.iter().map(|s| s.to_string()).collect(),
-        input_device: None,
+        model_path: resolve_model(settings.model_id.as_deref()).map(|(_, p)| p),
+        vad_path: installed_model_path(crate::models::VAD_MODEL.id),
+        vocabulary: settings.vocabulary.clone(),
+        input_device: settings.input_device.clone(),
         max_secs: capture::DEFAULT_MAX_SECS,
-        mode: RecordMode::Toggle,
+        mode: settings.mode,
     }
 }

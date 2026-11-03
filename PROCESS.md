@@ -5,17 +5,21 @@ Newest log entries at the bottom of each section. Dates are absolute (YYYY-MM-DD
 
 ---
 
-## ▶ RESUME HERE (bookmarked 2026-11-02)
+## ▶ RESUME HERE (updated 2026-11-03)
 
-**Where we are:** Milestones 0–2 ✅ (user retest passed 2026-11-02). **Next: Milestone 3**: Mac text
-insertion (Accessibility permission, capture and revalidate the target, paste with clipboard save/restore,
-recovery window). LoqWat currently shows transcripts in its own window and does not insert them yet; that is expected.
+**Where we are:** Milestones 0–2 ✅🧪. **Milestone 3** (Mac text insertion) and **Milestone 4** (setup, preferences,
+model manager) are built and pass automated tests, but **neither has been tested by the user on the real app yet**.
+The user chose to move straight on to Milestone 4 and test later.
+
+**Next:** the user tests the M3 and M4 checklists in §6 (permissions must be granted again after each rebuild), then Milestone 5
+(spoken formatting "new line" / "new paragraph", idle model unload, resource bounds).
 
 To relaunch: `open src-tauri/target/release/bundle/macos/LoqWat.app` (rebuild: `npx tauri build --bundles app`).
+For logs, run the binary directly: `src-tauri/target/release/bundle/macos/LoqWat.app/Contents/MacOS/loqwat`.
 
-**Known open items carried forward:** "Pause Shortcut" still holds ⌥Space (release it on pause, Milestone 4);
-sleep/wake handling not implemented; sound cues not implemented; placeholder icons; stable code-signing
-identity (self-signed cert) so microphone/Accessibility permissions survive rebuilds (Milestone 6).
+**Known open items carried forward:** sleep/wake handling not implemented; placeholder icons; stable code-signing
+identity (self-signed cert) so microphone/Accessibility permissions survive rebuilds (Milestone 6). A phone version
+was considered and dropped (2026-11-03): the user's Android keyboard dictation already covers it.
 
 ## 1. Project summary
 
@@ -87,6 +91,17 @@ the text. No accounts, cloud, analytics, or transcript storage.
 | 2026-11-02 | Until Milestone 3, results go to the **recovery** path (main window shows the text) rather than claiming insertion | Honest status; reuses the spec's recovery flow |
 | 2026-11-02 | Bundle ad-hoc signed as `com.fcitradecraft.loqwat` (`signingIdentity "-"`), hardened runtime, `com.apple.security.device.audio-input` entitlement, `NSMicrophoneUsageDescription` | Without the entitlement the hardened runtime blocks the mic; without the description macOS kills the app |
 | 2026-11-02 | Cancel uses our own `extern "C"` abort trampoline instead of whisper-rs `set_abort_callback_safe` | whisper-rs 0.16 bug: the trampoline casts `Box<Box<dyn FnMut>>` to `F`, reads garbage, and aborts encoding (error -6) |
+| 2026-11-02 | Insertion: capture app/window/focused element (AX) at start; revalidate with `CFEqual` before paste; refuse on change, secure field, own app, or missing permission → recovery window | Spec §5: never guess the destination |
+| 2026-11-02 | Paste: save every pasteboard item/type, write text + `org.nspasteboard.TransientType`, ⌘V via CGEvent after modifiers are released; confirm via `AXNumberOfCharacters` change (≤1.5 s); otherwise "unverified" after a 400 ms settle; restore only if `changeCount` is still ours | Faithful restore without clobbering a user copy; the 400 ms settle is empirical, not a guarantee (documented limit) |
+| 2026-11-03 | Settings: versioned JSON at `<app-data>/com.fcitradecraft.loqwat/settings.json`, atomic write; unparseable file moved to `settings.json.bad`, defaults used; unknown fields ignored | Spec §2 SettingsStore; a corrupt file must never block startup |
+| 2026-11-03 | Shortcut is configurable; validated (needs ⌥/⌃/⌘ or an F-key; Escape and ⌘V/C/X/Z/Q/W/Tab/Space refused); new one test-registered before saving; old one restored on conflict | Spec §4: configurable shortcuts with clear conflict errors |
+| 2026-11-03 | **Pause unregisters the shortcut** (and so does recording a new shortcut in the UI) | Frees the key combination for other apps; fixes the M2 open item |
+| 2026-11-03 | Model manager: download (progress, cancel, verified, atomic), remove (not the one in use), switch (engine reload), **import only files that exactly match a catalog entry** (size + SHA-256) | Imports are as trustworthy as downloads; arbitrary files would bypass integrity checks |
+| 2026-11-03 | Speech detector (VAD) is downloaded automatically with the first model and can't be removed in the UI | It prevents invented text on silence |
+| 2026-11-03 | Runtime config is live: microphone and vocabulary apply at the next recording; a model switch drops the old model before loading the new one | No restart needed; avoids holding two models in memory |
+| 2026-11-03 | Launch at login via `tauri-plugin-autostart` 2.7 (LaunchAgent), opt-in, off by default; file dialog via `tauri-plugin-dialog` 2.8 (Rust side only, no JS permissions) | Spec §6; LaunchAgent points at the app's current path, so it must be re-enabled if the app moves |
+| 2026-11-03 | Sound cues (off by default): system sounds Tink (start), Pop (stop), Bottle (cancel) | Spec §4 optional cues; the start cue may be faintly captured in the recording |
+| 2026-11-03 | Main window hidden at launch, shown only when setup is incomplete or no model is installed | A menu bar app that launches at login shouldn't pop a window every time |
 
 ## 4. Milestones
 
@@ -97,8 +112,8 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on r
 | 0 | Repo + toolchain + Tauri scaffold | 1–2 | ✅ 🧪 release .app built and launched on dev Mac |
 | 1 | Prove transcription (file → mic), benchmark models | 3 | ✅ 🧪 file + live mic verified on dev Mac (accuracy pending user confirmation) |
 | 2 | Recording lifecycle / state machine / indicator | 4 | ✅ 🧪 user-tested on dev Mac (sleep/wake + sound cues deferred) |
-| 3 | Mac text insertion + clipboard + recovery window | 5 | ⬜ |
-| 4 | First-run setup, model manager, preferences | 6 | ⬜ |
+| 3 | Mac text insertion + clipboard + recovery window | 5 | ✅ built, clipboard tests pass · 🧪 user test pending |
+| 4 | First-run setup, model manager, preferences | 6 | ✅ built, unit tests pass · 🧪 user test pending |
 | 5 | Formatting, vocabulary hints, privacy/resource bounds | 7–8 | ⬜ |
 | 6 | Mac validation + packaging (.app/.dmg) | 9–10 | ⬜ |
 | 7 | Windows support | 11 | ⬜ (needs friend's OS/CPU/RAM) |
@@ -182,6 +197,34 @@ Each model ran in a fresh process.
 | Key repeat (hold ⌥Space ~3 s, toggle mode) | ✅ one session; no rapid duplicate sessions in the log |
 | Hold-to-talk mode | ✅ user-reported working (session 7, 2.7 s) |
 
+### 2026-11-02 — Milestone 3 (automated only)
+| Check | Result |
+|---|---|
+| Pasteboard save/restore on a private named pasteboard: multiple items + types (text, RTF, PNG bytes) | ✅ restored byte-for-byte |
+| Empty pasteboard restore | ✅ |
+| `changeCount` detects a user copy made after our write (restore skipped) | ✅ |
+| Unit tests total / clippy | ✅ 34 pass / clean |
+| Release app launch | ✅ engine ready (load 258 ms, warm-up 269 ms) |
+
+**User test checklist (pending):** grant Accessibility; dictate into TextEdit (text appears at caret); copy text first and
+check ⌘V afterwards gives the original; switch apps mid-transcription → recovery window; password field → refused;
+Copy / Insert into a field… / Discard; Word, Mail, Gmail in Chrome (may report "can't confirm").
+
+### 2026-11-03 — Milestone 4 (automated only)
+| Check | Result |
+|---|---|
+| Unit tests (+ settings 8, shortcut validation 2, model import/remove 2) | ✅ 46 pass |
+| `cargo clippy --all-targets`, `tsc --noEmit` | ✅ clean |
+| Release `.app` | ✅ 9.0 MiB (was 4.3; added autostart + dialog plugins) |
+| Launch with no settings file | ✅ shortcut registered from defaults, engine ready (load 397 ms, warm-up 268 ms) |
+| UI rendering | ⚠️ not seen by Claude (no screen-recording permission); needs the user's check |
+
+**User test checklist (pending):** setup window appears on first launch; microphone list + Test (meter moves, "heard you");
+pick another mic and dictate; change shortcut (e.g. ⌃⇧D) and use it; try a taken/invalid one → clear error, old one still works;
+Pause → ⌥Space free for other apps, Unpause → works again; edit vocabulary + Save; sound cues; launch at login on/off
+(check System Settings → General → Login Items); Models: download base.en (progress, cancel, retry), Use it, switch back,
+Remove it; import a model file; quit and relaunch → settings kept, no setup window.
+
 Frontmost-app logger used for focus checks:
 ```zsh
 prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | head -1 | sed -E 's/^"([^"]*)".*/\1/');
@@ -237,3 +280,16 @@ prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | h
 - **Bookmarked here** before the user restarted. See "RESUME HERE" at the top.
 - **Resumed after the Claude Code restart.** User retest passed (see §6) → Milestone 2 ✅. The user noted the text
   doesn't go into TextEdit; that's expected until Milestone 3.
+
+### 2026-11-03
+- Built Milestone 3 (see §3 decisions, §6 results); committed `efd50e0`. User asked about a phone version; decided against
+  it (Android keyboard dictation already covers it). User chose to start Milestone 4 before testing M3.
+#### Milestone 4
+- New modules: `settings.rs` (versioned store, vocabulary normalization: trim, dedupe, ≤40 terms, ≤40 chars each, ≤400 chars total),
+  `shortcut.rs` (validation). `models.rs`: `import` (catalog match only), `remove`. `runtime.rs`: live config,
+  `reload_engine`, model resolution from settings. `platform`: sound cues, reveal folder.
+- `lib.rs`: settings-driven startup, shortcut sync (pause releases it), 18 new commands (microphones + test, shortcut capture/set,
+  vocabulary, cues, login item, setup, models list/download/cancel/use/remove/import/reveal).
+- UI: tabs Status / Setup / Preferences / Models; setup checklist (mic test, Accessibility, model download, shortcut).
+- Clearer message when the chosen microphone is disconnected.
+
