@@ -5,6 +5,7 @@ pub mod audio;
 pub mod capture;
 pub mod controller;
 pub mod engine;
+pub mod format;
 pub mod metrics;
 pub mod models;
 pub mod platform;

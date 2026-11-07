@@ -273,7 +273,7 @@ fn engine_thread(rt: Runtime, rx: Receiver<EngineCmd>) {
                                 .then(|| vocabulary.join(", ") + "."),
                             ..Default::default()
                         };
-                        run_job(l, s, &audio, &opts, cancel)
+                        run_job(l, s, &audio, &opts, &vocabulary, cancel)
                     }
                 };
                 rt.dispatch(Event::TranscriptionFinished(s, outcome));
@@ -315,6 +315,7 @@ fn run_job(
     s: SessionId,
     audio: &RawAudio,
     opts: &TranscribeOptions,
+    vocabulary: &[String],
     cancel: Arc<AtomicBool>,
 ) -> Outcome {
     let start = Instant::now();
@@ -350,10 +351,11 @@ fn run_job(
                 t.elapsed.as_secs_f64() * 1000.0,
                 start.elapsed().as_secs_f64() * 1000.0
             );
-            if t.text.is_empty() {
+            let text = crate::format::format_transcript(&t.text, vocabulary);
+            if text.is_empty() {
                 Outcome::NoSpeech
             } else {
-                Outcome::Text(t.text)
+                Outcome::Text(text)
             }
         }
         Err(e) => Outcome::Failed(format!("transcription failed: {e:#}")),

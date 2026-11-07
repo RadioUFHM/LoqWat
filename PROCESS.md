@@ -5,14 +5,16 @@ Newest log entries at the bottom of each section. Dates are absolute (YYYY-MM-DD
 
 ---
 
-## ▶ RESUME HERE (updated 2026-11-03)
+## ▶ RESUME HERE (updated 2026-11-07)
 
-**Where we are:** Milestones 0–2 ✅🧪. **Milestone 3** (Mac text insertion) and **Milestone 4** (setup, preferences,
-model manager) are built and pass automated tests, but **neither has been tested by the user on the real app yet**.
-The user chose to move straight on to Milestone 4 and test later.
+**Where we are:** Milestones 0–2 ✅🧪. **Milestones 3 and 4** are built and in daily use; the user reports they are
+"working well" (2026-11-07), but the full M3/M4 checklists in §6 have **not** been run, so they are not marked 🧪.
+**Milestone 5** has started: a formatting pass (`format.rs`) now turns spoken punctuation into marks and applies the
+user's number style. It passes unit tests and is in the 2026-11-07 release build; it has not been tried on real speech yet.
 
-**Next:** the user tests the M3 and M4 checklists in §6 (permissions must be granted again after each rebuild), then Milestone 5
-(spoken formatting "new line" / "new paragraph", idle model unload, resource bounds).
+**Next:** the user tries spoken punctuation and numbers in the rebuilt app (permissions must be granted again after
+the rebuild). Then the rest of Milestone 5 ("new line" / "new paragraph", idle model unload, resource bounds).
+Running the full M3/M4 checklists is still outstanding.
 
 To relaunch: `open src-tauri/target/release/bundle/macos/LoqWat.app` (rebuild: `npx tauri build --bundles app`).
 For logs, run the binary directly: `src-tauri/target/release/bundle/macos/LoqWat.app/Contents/MacOS/loqwat`.
@@ -51,7 +53,8 @@ the text. No accounts, cloud, analytics, or transcript storage.
   shadows `/usr/bin/curl`. Workaround: put `/usr/bin` first in PATH for build commands.
   Fix: `conda update curl` or `conda install krb5`.
 - `~/.bash_profile` is owned by root, so rustup couldn't edit it. Rust PATH must be added
-  to `~/.zshrc` manually: `echo '. "$HOME/.cargo/env"' >> ~/.zshrc`. (Pending — user action.)
+  to `~/.zshrc` manually: `echo '. "$HOME/.cargo/env"' >> ~/.zshrc`. ✅ Done (verified 2026-11-07: new shell
+  finds cargo 1.99.1 and rustc 1.99.1).
 
 ## 3. Key decisions
 
@@ -102,6 +105,10 @@ the text. No accounts, cloud, analytics, or transcript storage.
 | 2026-11-03 | Launch at login via `tauri-plugin-autostart` 2.7 (LaunchAgent), opt-in, off by default; file dialog via `tauri-plugin-dialog` 2.8 (Rust side only, no JS permissions) | Spec §6; LaunchAgent points at the app's current path, so it must be re-enabled if the app moves |
 | 2026-11-03 | Sound cues (off by default): system sounds Tink (start), Pop (stop), Bottle (cancel) | Spec §4 optional cues; the start cue may be faintly captured in the recording |
 | 2026-11-03 | Main window hidden at launch, shown only when setup is incomplete or no model is installed | A menu bar app that launches at login shouldn't pop a window every time |
+| 2026-11-07 | **Number style** (user rule): one–nine spelled out; 10 and up as digits with thousands commas. Digits kept for money/percent, decimals/times/dates, and after labels (Rule 3, Section 5, page 2, Tier 1, Form…); 1st–9th → first–ninth; no commas in years 1900–2099 or ID-like numbers (Form 8300, case 123456); "3-day" → "three-day" | User's style choice; exceptions chosen by the user 2026-11-07 |
+| 2026-11-07 | **Spoken punctuation**: "comma", "colon", "semicolon", "question mark", "exclamation point/mark" always become the mark, replacing any mark whisper added next to the word | User bug: the word *and* the mark both appeared ("Hello, comma, world") |
+| 2026-11-07 | "period" → "." **only at a sentence end** (end of dictation, whisper put .?! after it, or a capitalized word follows); otherwise it stays a word | "period" is a common word in AML text (lookback/review period). Limitation: a sentence that really ends in the word needs "period period" |
+| 2026-11-07 | Formatting runs in `format.rs` after `clean_transcript`, on whole tokens only; anything not matching a rule is left as whisper wrote it | Predictable; easy to test |
 
 ## 4. Milestones
 
@@ -112,9 +119,9 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on r
 | 0 | Repo + toolchain + Tauri scaffold | 1–2 | ✅ 🧪 release .app built and launched on dev Mac |
 | 1 | Prove transcription (file → mic), benchmark models | 3 | ✅ 🧪 file + live mic verified on dev Mac (accuracy pending user confirmation) |
 | 2 | Recording lifecycle / state machine / indicator | 4 | ✅ 🧪 user-tested on dev Mac (sleep/wake + sound cues deferred) |
-| 3 | Mac text insertion + clipboard + recovery window | 5 | ✅ built, clipboard tests pass · 🧪 user test pending |
-| 4 | First-run setup, model manager, preferences | 6 | ✅ built, unit tests pass · 🧪 user test pending |
-| 5 | Formatting, vocabulary hints, privacy/resource bounds | 7–8 | ⬜ |
+| 3 | Mac text insertion + clipboard + recovery window | 5 | ✅ built, clipboard tests pass · in daily use, "working well" (2026-11-07); full checklist not run |
+| 4 | First-run setup, model manager, preferences | 6 | ✅ built, unit tests pass · in daily use, "working well" (2026-11-07); full checklist not run |
+| 5 | Formatting, vocabulary hints, privacy/resource bounds | 7–8 | 🟨 spoken punctuation + number style built (unit tests); new line/paragraph, idle unload, bounds to do |
 | 6 | Mac validation + packaging (.app/.dmg) | 9–10 | ⬜ |
 | 7 | Windows support | 11 | ⬜ (needs friend's OS/CPU/RAM) |
 | 8 | Final deliverables & report | 12 | ⬜ |
@@ -129,8 +136,9 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · 🧪 tested (on r
 - Real-voice accuracy unverified (all benchmarks so far are TTS). Needs user recordings.
 - Small models misheard "Every analyst" as "three analysts" in the 50 s TTS clip (base.en and large-turbo
   got it right). Watch for this in real-voice tests.
-- Numbers are written as digits ("14", "1,200", "$4.7 million"). This is model output style, not an error;
-  confirm the user is OK with it.
+- ~~Numbers are written as digits; confirm the user is OK with it.~~ Resolved 2026-11-07: user set a number style
+  (see §3), now applied by `format.rs`. Not handled yet: numbers 10+ that whisper spells out as words ("twelve")
+  stay as words. Whisper rarely does this.
 
 ## 6. Test & benchmark results
 
@@ -225,6 +233,17 @@ Pause → ⌥Space free for other apps, Unpause → works again; edit vocabulary
 (check System Settings → General → Login Items); Models: download base.en (progress, cancel, retry), Use it, switch back,
 Remove it; import a model file; quit and relaunch → settings kept, no setup window.
 
+### 2026-11-07 — Milestone 5 formatting (automated only)
+| Check | Result |
+|---|---|
+| `format.rs` unit tests (spoken punctuation, "period" rule, capitals, abbreviations, number style, exceptions, years/IDs) | ✅ 10 pass |
+| All unit tests / `cargo clippy --all-targets` | ✅ 56 pass / clean |
+| Release `.app` rebuilt | ✅ 9.03 MiB |
+
+**User test (pending):** dictate "Hello comma how are you question mark"; "The lookback period ends Friday period";
+"We filed 3 SARs and 1200 CTRs in 2026"; "Rule 3 applies to 5 percent".
+M3/M4: user reports normal use is working well; the full checklists above have not been run.
+
 Frontmost-app logger used for focus checks:
 ```zsh
 prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | head -1 | sed -E 's/^"([^"]*)".*/\1/');
@@ -293,3 +312,9 @@ prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | h
 - UI: tabs Status / Setup / Preferences / Models; setup checklist (mic test, Accessibility, model download, shortcut).
 - Clearer message when the chosen microphone is disconnected.
 
+### 2026-11-07
+- Confirmed Rust PATH fix is in `~/.zshrc` (cargo/rustc 1.99.1 in a new shell); marked done in §2.
+- User feedback: M3/M4 working well in daily use (full checklists not run); punctuation words appear along with the mark.
+- User set the number style and, when asked, chose the exceptions and the "period" rule (§3).
+- Added `format.rs` (spoken punctuation + number style), called from `runtime::run_job` after transcription; 10 unit tests.
+- Release `.app` rebuilt; awaiting the user's real-voice check.

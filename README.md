@@ -3,7 +3,21 @@
 Local, private push-to-talk dictation for macOS (Apple Silicon) and Windows.
 Speak into any text field; transcription runs on-device with whisper.cpp.
 
-Status: early development — see [PROCESS.md](PROCESS.md) for progress and decisions.
+Status: early development, in daily use on the dev Mac. Dictation, insertion into the focused app, setup,
+preferences and the model manager work; Windows support and packaging are not built yet.
+See [PROCESS.md](PROCESS.md) for progress and decisions.
+
+## Using it
+
+Click into a text field, press **⌥ Space** (configurable), speak, and press it again (or release, in hold mode).
+**Esc** cancels. The text is typed where your cursor was; if the target changed, it goes to a recovery window instead.
+
+Say punctuation out loud: **comma**, **colon**, **semicolon**, **question mark**, **exclamation point**, **period**.
+"period" only becomes "." at the end of a sentence, so "the lookback period ends Friday" stays as words. To end a
+sentence with the word itself, say "period period".
+
+Numbers: one through nine are spelled out and 10 and up are digits with commas (1,200). Money, percentages, decimals,
+times, dates and labels (Rule 3, page 2) keep their digits, and years (2026) and IDs (Form 8300) get no commas.
 
 ## Stack
 
@@ -36,7 +50,7 @@ cd src-tauri && cargo clippy --all-targets          # lint
 ```
 index.html, src/        TypeScript UI (settings/status)
 src-tauri/              Rust app (Tauri)
-  src/                  application code
+  src/                  application code (format.rs: punctuation + number rules)
   examples/             dev/diagnostic tools (never bundled)
   build.rs              Tauri build + macOS clang runtime link fix
   tauri.conf.json       app identity, window, bundle config
