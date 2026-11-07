@@ -15,7 +15,7 @@ use crate::controller::RecordMode;
 pub const SETTINGS_VERSION: u32 = 1;
 pub const DEFAULT_SHORTCUT: &str = "Alt+Space";
 pub const DEFAULT_MODEL: &str = "small.en-q5_1";
-pub const DEFAULT_VOCABULARY: &[&str] = &["FCI Tradecraft", "FinCEN", "BSA", "AML", "KYC", "OFAC"];
+pub const DEFAULT_VOCABULARY: &[&str] = &["FCI Tradecraft", "FinCEN", "BSA", "AML", "KYC", "OFAC", "lookback"];
 
 /// Whisper's prompt window is ~224 tokens; keep hints well inside it.
 pub const MAX_VOCAB_TERMS: usize = 40;

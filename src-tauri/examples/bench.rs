@@ -1,9 +1,12 @@
 //! Transcription benchmark: cold load vs. warm transcription, per model and file.
 //!
 //!   cargo run --release --example bench -- --models base.en,small.en [--runs 3]
-//!       [--beam 5] [--prompt "FinCEN, OFAC"] [--cpu] [--vad] [--show-text] file1.wav file2.wav ...
+//!       [--beam 5] [--prompt "FinCEN, OFAC"] [--cpu] [--vad] [--format] [--show-text] file1.wav ...
 //!
 //! `--vad` runs the Silero speech gate first; files without speech skip transcription.
+//! `--format` applies LoqWat's text formatting (spoken punctuation, number style) to the
+//! output and, like the app, appends the punctuation hint to the `--prompt` vocabulary; then if `<file>.expected.txt` exists the result is compared
+//! to it exactly and a ✓/✗ line is printed.
 //!
 //! If `<file>.txt` exists next to a WAV, word error rate (WER) against it is reported.
 //! Each model is benchmarked in a fresh child process so memory figures and
@@ -14,7 +17,7 @@ use std::process::Command;
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use loqwat_lib::{audio, engine, metrics, models, vad};
+use loqwat_lib::{audio, engine, format, metrics, models, vad};
 
 struct Args {
     models: Vec<String>,
@@ -23,6 +26,7 @@ struct Args {
     prompt: Option<String>,
     cpu: bool,
     vad: bool,
+    format: bool,
     show_text: bool,
     child: bool,
     files: Vec<PathBuf>,
@@ -36,6 +40,7 @@ fn parse_args() -> Result<Args> {
         prompt: None,
         cpu: false,
         vad: false,
+        format: false,
         show_text: false,
         child: false,
         files: vec![],
@@ -56,6 +61,7 @@ fn parse_args() -> Result<Args> {
             "--prompt" => a.prompt = Some(it.next().context("--prompt value")?),
             "--cpu" => a.cpu = true,
             "--vad" => a.vad = true,
+            "--format" => a.format = true,
             "--show-text" => a.show_text = true,
             "--child" => a.child = true,
             _ => a.files.push(PathBuf::from(arg)),
@@ -127,9 +133,23 @@ fn run_model(args: &Args, model_id: &str) -> Result<()> {
         metrics::format_mb(metrics::peak_rss_bytes())
     );
 
+    // Same vocabulary the prompt carries, as the app passes its vocabulary.
+    let vocabulary: Vec<String> = args
+        .prompt
+        .as_deref()
+        .unwrap_or("")
+        .trim_end_matches('.')
+        .split(", ")
+        .filter(|t| !t.is_empty())
+        .map(String::from)
+        .collect();
     let opts = engine::TranscribeOptions {
         beam_size: args.beam,
-        initial_prompt: args.prompt.clone(),
+        initial_prompt: if args.format {
+            Some(format::whisper_prompt(&vocabulary))
+        } else {
+            args.prompt.clone()
+        },
         ..Default::default()
     };
 
@@ -181,6 +201,9 @@ fn run_model(args: &Args, model_id: &str) -> Result<()> {
             warm.push(t.elapsed.as_secs_f64() * 1000.0);
             last = t;
         }
+        if args.format {
+            last.text = format::format_transcript(&last.text, &vocabulary);
+        }
         warm.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let warm_med = warm.get(warm.len() / 2).copied().unwrap_or(f64::NAN);
         let dur = raw.duration_secs() as f64;
@@ -200,6 +223,15 @@ fn run_model(args: &Args, model_id: &str) -> Result<()> {
                 "    text: {:?}  (convert {:.1} ms, {}ch@{}Hz)",
                 last.text, conv_ms, raw.channels, raw.sample_rate
             );
+        }
+        let expected = std::fs::read_to_string(file.with_extension("expected.txt")).ok();
+        if let (true, Some(exp)) = (args.format, expected) {
+            let exp = exp.trim();
+            if last.text == exp {
+                println!("    exact: ✓");
+            } else {
+                println!("    exact: ✗\n      want: {exp:?}\n      got:  {:?}", last.text);
+            }
         }
     }
     println!(

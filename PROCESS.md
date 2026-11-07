@@ -5,16 +5,28 @@ Newest log entries at the bottom of each section. Dates are absolute (YYYY-MM-DD
 
 ---
 
-## ▶ RESUME HERE (updated 2026-11-07)
+## ▶ RESUME HERE (bookmarked 2026-11-07)
 
-**Where we are:** Milestones 0–2 ✅🧪. **Milestones 3 and 4** are built and in daily use; the user reports they are
-"working well" (2026-11-07), but the full M3/M4 checklists in §6 have **not** been run, so they are not marked 🧪.
-**Milestone 5** has started: a formatting pass (`format.rs`) now turns spoken punctuation into marks and applies the
-user's number style. It passes unit tests and is in the 2026-11-07 release build; it has not been tried on real speech yet.
+**Where we are:** Milestones 0–2 ✅🧪. **Milestones 3 and 4** are in daily use, and the user says they're "working well".
+The full M3/M4 checklists in §6 have **not** been run, so they are not marked 🧪.
+**Milestone 5** 🟨: `format.rs` handles spoken punctuation (including quotes and parentheses) and the user's number
+style. It has been measured on the user's own voice (§6, "Real-voice results"): 3/5 exact on punctuation passages, and
+the two misses are single misheard words. Default model stays `small.en-q5_1`. The user's verdict: "good so far".
 
-**Next:** the user tries spoken punctuation and numbers in the rebuilt app (permissions must be granted again after
-the rebuild). Then the rest of Milestone 5 ("new line" / "new paragraph", idle model unload, resource bounds).
-Running the full M3/M4 checklists is still outstanding.
+**Before picking up again (user):**
+1. Add "lookback" to Preferences → Vocabulary. The saved list predates the new default, so it won't appear automatically.
+2. After any rebuild, reset Accessibility: `tccutil reset Accessibility com.fcitradecraft.loqwat`, then grant it again.
+
+**Next, in order (open decisions in bold):**
+1. **Personal "heard → write" correction list** in Preferences, e.g. "whole fact" → OFAC. OFAC is still misheard in
+   natural speech. Proposed, not yet approved by the user.
+2. Rest of Milestone 5: "new line" / "new paragraph", idle model unload, resource bounds.
+3. **Stable self-signed signing identity** (pulled forward from M6?), so permissions survive rebuilds. Every rebuild
+   currently breaks Accessibility.
+4. The user runs the full M3/M4 checklists in §6.
+
+After any change to the formatter or prompt, rescore the voice samples (recordings stay in git-ignored `recordings/voice/`):
+`cd src-tauri && cargo run --release --example bench -- --models small.en-q5_1 --runs 1 --vad --format --show-text --prompt "FCI Tradecraft, FinCEN, BSA, AML, KYC, OFAC, lookback." ../recordings/voice/*.wav`
 
 To relaunch: `open src-tauri/target/release/bundle/macos/LoqWat.app` (rebuild: `npx tauri build --bundles app`).
 For logs, run the binary directly: `src-tauri/target/release/bundle/macos/LoqWat.app/Contents/MacOS/loqwat`.
@@ -108,6 +120,10 @@ the text. No accounts, cloud, analytics, or transcript storage.
 | 2026-11-07 | **Number style** (user rule): one–nine spelled out; 10 and up as digits with thousands commas. Digits kept for money/percent, decimals/times/dates, and after labels (Rule 3, Section 5, page 2, Tier 1, Form…); 1st–9th → first–ninth; no commas in years 1900–2099 or ID-like numbers (Form 8300, case 123456); "3-day" → "three-day" | User's style choice; exceptions chosen by the user 2026-11-07 |
 | 2026-11-07 | **Spoken punctuation**: "comma", "colon", "semicolon", "question mark", "exclamation point/mark" always become the mark, replacing any mark whisper added next to the word | User bug: the word *and* the mark both appeared ("Hello, comma, world") |
 | 2026-11-07 | "period" → "." **only at a sentence end** (end of dictation, whisper put .?! after it, or a capitalized word follows); otherwise it stays a word | "period" is a common word in AML text (lookback/review period). Limitation: a sentence that really ends in the word needs "period period" |
+| 2026-11-07 | Quotes and parentheses: "open/begin/start quote", "close/end quote", "unquote"; "open/left paren(thesis)", "close/right paren(thesis)" ("parent" accepted as a mishearing). A bare "quote" is not a command. Whisper's sentence end after a close goes inside a quote (`done."`) and after a parenthesis (`(draft).`) | User asked how to dictate quotes/parentheses; "quote" alone is common in finance ("get a quote") |
+| 2026-11-07 | Voice samples: `examples/record_samples` reads passages from `scripts/voice-prompts.txt` (committed, no personal data), saves WAV + reference to git-ignored `recordings/voice/`; `bench --format` checks each result exactly against `<id>.expected.txt` | Measure accuracy on the user's real voice instead of TTS; WER ignores punctuation, so formatting needs an exact check |
+| 2026-11-07 | Whisper prompt = user vocabulary + fixed punctuation hint (not shown in the vocabulary UI); `bench --format` uses the same prompt | Measured on the user's voice: small models stopped dropping spoken commands |
+| 2026-11-07 | Keep `small.en-q5_1` as default after real-voice test | Same accuracy as turbo on this voice, 2.5× faster |
 | 2026-11-07 | Formatting runs in `format.rs` after `clean_transcript`, on whole tokens only; anything not matching a rule is left as whisper wrote it | Predictable; easy to test |
 
 ## 4. Milestones
@@ -240,6 +256,41 @@ Remove it; import a model file; quit and relaunch → settings kept, no setup wi
 | All unit tests / `cargo clippy --all-targets` | ✅ 56 pass / clean |
 | Release `.app` rebuilt | ✅ 9.03 MiB |
 
+### 2026-11-07 — Quotes/parentheses + voice-sample kit (automated only)
+| Check | Result |
+|---|---|
+| Quote/parenthesis unit tests | ✅ 2 new (12 formatting tests total) |
+| Prompt file parses; each punctuation passage's `expect` matches the formatter on a perfect transcript | ✅ (caught one passage, "draft period I will", where the "I" rule made it ambiguous; reworded) |
+| All tests / clippy | ✅ 58 lib + 2 example tests pass / clean |
+| Release `.app` rebuilt; `record_samples` + `bench` precompiled | ✅ |
+
+**Voice samples (pending, user):** in a normal Terminal window (not Claude Code's `!`, which has no keyboard input):
+`cd LoqWat/src-tauri && cargo run --release --example record_samples`. Seven passages, about 4 minutes. Terminal needs
+microphone permission. Then score with
+`cargo run --release --example bench -- --models small.en-q5_1 --vad --format --show-text --prompt "FCI Tradecraft, FinCEN, BSA, AML, KYC, OFAC." ../recordings/voice/*.wav`.
+
+### 2026-11-07 — Real-voice results (user's voice, Yeti mic, 7 passages, ~2.5 min)
+Exact = formatted output identical to the passage's `expect` line (5 punctuation passages). WER on the 42 s natural read.
+
+| Model | Exact (before fixes) | Exact (after) | Natural WER | Warm, 42 s clip |
+|---|---|---|---|---|
+| small.en-q5_1 (default) | 1/5 | **3/5** | 4.4% | 0.96 s |
+| small.en | 1/5 | — | 4.4% | 1.05 s |
+| base.en | 0/5 | — | 32.5% (dropped the last third) | 0.50 s |
+| large-v3-turbo-q5_0 | 2/5 | 3/5 | 3.5% | 2.38 s |
+
+- **Every model** heard "and" as "in" (02) and "date" as "data" (05). These are pronunciation or audio, not formatting.
+- **Before the fixes**, small models dropped "exclamation point" and "semicolon" entirely and wrote "open, parent".
+  Appending the punctuation words to the prompt (`format::PUNCTUATION_HINT`) fixed both. Plain speech (06) gained no
+  invented punctuation words.
+- whisper segment breaks: "going to... ...retune" and "20... 26" → now rejoined. "1.08 p.m." / "108 p.m." → "1:08 p.m.".
+- Comma whisper put before "open paren" → removed (kept before an opening quote).
+- "look back" → "lookback" once "lookback" is in the vocabulary (now a default; existing users must add it).
+- **OFAC** in natural speech: "The whole fact" (small), "Sofac" (turbo), even with OFAC in the prompt. Not fixed.
+- Free talk: the user's own "open quote / close quote / end quote" were applied correctly; name "Rio Miner" correct on small
+  (base.en: "Minor").
+- Decision: keep **small.en-q5_1**. large-turbo is no more accurate on this voice and is 2.5× slower; base.en is unreliable.
+
 **User test (pending):** dictate "Hello comma how are you question mark"; "The lookback period ends Friday period";
 "We filed 3 SARs and 1200 CTRs in 2026"; "Rule 3 applies to 5 percent".
 M3/M4: user reports normal use is working well; the full checklists above have not been run.
@@ -318,3 +369,10 @@ prev=""; while true; do cur=$(lsappinfo info -only name "$(lsappinfo front)" | h
 - User set the number style and, when asked, chose the exceptions and the "period" rule (§3).
 - Added `format.rs` (spoken punctuation + number style), called from `runtime::run_job` after transcription; 10 unit tests.
 - Release `.app` rebuilt; awaiting the user's real-voice check.
+- Accessibility stopped working after the rebuild (ad-hoc signature changed); fixed with
+  `tccutil reset Accessibility com.fcitradecraft.loqwat` + re-grant. Committed and pushed `8ffe1f3`.
+- User: dictation "pretty good"; asked how to get quotation marks and parentheses → added the commands (§3).
+- User agreed to record voice samples → added `scripts/voice-prompts.txt`, `examples/record_samples.rs`, `bench --format`.
+- User recorded the 7 passages. Scored all 4 models (§6). Added the punctuation hint to the prompt, segment-break rejoin,
+  clock-time fix, no comma before "(", "parren", default vocabulary + "lookback". 61 lib + 2 example tests, clippy clean;
+  `.app` rebuilt.

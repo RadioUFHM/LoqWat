@@ -13,6 +13,8 @@ Click into a text field, press **⌥ Space** (configurable), speak, and press it
 **Esc** cancels. The text is typed where your cursor was; if the target changed, it goes to a recovery window instead.
 
 Say punctuation out loud: **comma**, **colon**, **semicolon**, **question mark**, **exclamation point**, **period**.
+Quotes: **open quote** … **close quote** (or "begin quote" / "end quote" / "unquote"). Parentheses: **open paren** …
+**close paren** (or "open parenthesis", "left/right paren"). A plain "quote" stays a word ("get a quote").
 "period" only becomes "." at the end of a sentence, so "the lookback period ends Friday" stays as words. To end a
 sentence with the word itself, say "period period".
 
@@ -43,6 +45,7 @@ npm run tauri dev                                   # run the app in development
 npx tauri build --bundles app                       # release .app → src-tauri/target/release/bundle/macos/
 cd src-tauri && cargo run --example whisper_info    # print whisper.cpp version + compiled backends
 cd src-tauri && cargo clippy --all-targets          # lint
+cd src-tauri && cargo run --release --example record_samples   # record your voice (scripts/voice-prompts.txt)
 ```
 
 ## Repository layout

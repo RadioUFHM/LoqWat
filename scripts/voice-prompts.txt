@@ -1,0 +1,41 @@
+# LoqWat voice-sample script, read by `cargo run --release --example record_samples`.
+#
+# Each passage:  [id]  then  read: <what you say>  and optionally
+#   expect: <exact text LoqWat should produce>   (checked by `bench --format`)
+#   note:   <instructions shown before recording>
+# Without `expect`, the passage is only scored by word error rate (or not at all
+# if it has no `read` text, e.g. free speech).
+#
+# Never read real customer names, account numbers or case details.
+
+[01-email]
+note: Read at your normal pace, saying the punctuation words out loud.
+read: Hi Maria comma thanks for sending the draft period My comments will come back to you by Friday morning period
+expect: Hi Maria, thanks for sending the draft. My comments will come back to you by Friday morning.
+
+[02-terms]
+note: Domain terms. Say the acronyms the way you normally do.
+read: The BSA officer reviewed the SAR narrative and the CTR aggregation report period FinCEN guidance on beneficial ownership under the CDD rule applies comma so the analyst escalated the case for EDD period
+expect: The BSA officer reviewed the SAR narrative and the CTR aggregation report. FinCEN guidance on beneficial ownership under the CDD rule applies, so the analyst escalated the case for EDD.
+
+[03-numbers]
+note: Numbers. Say them as words, the way you would in conversation.
+read: We cleared three alerts on Monday and twelve hundred alerts in October period Rule seven flagged forty five accounts in twenty twenty six period The lookback period is ninety days period
+expect: We cleared three alerts on Monday and 1,200 alerts in October. Rule 7 flagged 45 accounts in 2026. The lookback period is 90 days.
+
+[04-quotes-parens]
+note: Quotes and parentheses.
+read: The customer said comma open quote I did not know the limit period close quote The bank filed a report open paren SAR close paren the next day period
+expect: The customer said, "I did not know the limit." The bank filed a report (SAR) the next day.
+
+[05-marks]
+note: Other punctuation.
+read: Can you confirm the wire date question mark The deadline is firm exclamation point Next steps colon review the file semicolon then close the alert period
+expect: Can you confirm the wire date? The deadline is firm! Next steps: review the file; then close the alert.
+
+[06-natural]
+note: Read naturally WITHOUT saying punctuation. This measures plain accuracy on your voice (about 40 seconds).
+read: Good morning everyone. Before we get into the agenda I want to thank the investigations team for closing out the backlog last week. We are still seeing a lot of false positives from the structuring rules, so the model validation group is going to retune the thresholds and run them against last quarter's data. In the meantime, if an alert looks like ordinary payroll activity, document why and move on. Sanctions screening is the other priority. OFAC updated the list again, and every potential match needs a clear rationale before it is cleared. Finally, the training on SAR narratives is scheduled for the end of the month. Please make sure your teams sign up.
+
+[07-free]
+note: Speak freely for about a minute: your week, a training idea, anything. Talk the way you normally would, pauses and all. No real customer details. There's no script, so nothing is scored; you'll read the output yourself.

@@ -269,8 +269,7 @@ fn engine_thread(rt: Runtime, rx: Receiver<EngineCmd>) {
                     Some(l) => {
                         let vocabulary = rt.config().vocabulary;
                         let opts = TranscribeOptions {
-                            initial_prompt: (!vocabulary.is_empty())
-                                .then(|| vocabulary.join(", ") + "."),
+                            initial_prompt: Some(crate::format::whisper_prompt(&vocabulary)),
                             ..Default::default()
                         };
                         run_job(l, s, &audio, &opts, &vocabulary, cancel)
